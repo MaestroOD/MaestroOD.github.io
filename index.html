@@ -7,13 +7,16 @@
   <title>Adam Murdock Gale — Academic Profile</title>
   <style>
     :root {
-      --ink: #172033;
-      --muted: #667085;
-      --line: #dde2ea;
+      /* Western University palette: Western Purple #4F2683, Western Silver #807F83 */
+      --ink: #1e1530;
+      --muted: #5f5e63;
+      --line: #e4dfeb;
       --paper: #ffffff;
-      --wash: #f4f6fa;
-      --accent: #2457a7;
-      --accent-soft: #eaf1fb;
+      --wash: #f6f3fa;
+      --accent: #4f2683;
+      --accent-dark: #3a1c61;
+      --accent-soft: #efe9f6;
+      --silver: #807f83;
     }
 
     * { box-sizing: border-box; }
@@ -41,6 +44,7 @@
       top: 0;
       z-index: 10;
       background: rgba(255, 255, 255, 0.96);
+      border-top: 5px solid var(--accent);
       border-bottom: 1px solid var(--line);
       backdrop-filter: blur(10px);
     }
@@ -54,7 +58,7 @@
     }
 
     .brand {
-      color: var(--ink);
+      color: var(--accent);
       font-family: Georgia, "Times New Roman", serif;
       font-size: 1.25rem;
       font-weight: 700;
@@ -68,6 +72,20 @@
     }
 
     .nav-links a { color: var(--muted); }
+    .nav-links a:hover { color: var(--accent); }
+
+    #about { background: linear-gradient(180deg, var(--wash), var(--paper)); }
+
+    h2 { color: var(--accent); }
+
+    h2::after {
+      content: "";
+      display: block;
+      width: 48px;
+      height: 3px;
+      margin-top: 12px;
+      background: var(--silver);
+    }
 
     main { min-height: 70vh; }
 
@@ -96,7 +114,7 @@
     .portrait-placeholder {
       display: grid;
       place-items: center;
-      color: var(--muted);
+      color: #c9bcdc;
       text-align: center;
       font-size: 0.9rem;
     }
@@ -159,7 +177,13 @@
       color: white;
     }
 
-    .button:hover { text-decoration: none; transform: translateY(-1px); }
+    .button:hover { text-decoration: none; transform: translateY(-1px); border-color: var(--accent); }
+    .button.primary:hover { background: var(--accent-dark); }
+
+    .links { font-size: 0.92rem; }
+    .links a { font-weight: 600; }
+
+    .personal { color: var(--muted); max-width: 720px; }
 
     .grid {
       display: grid;
@@ -222,8 +246,6 @@
       gap: 20px;
     }
 
-    .hero.no-photo { grid-template-columns: 1fr; }
-
     h2 + h3.group, h3.group {
       margin: 36px 0 4px;
       color: var(--muted);
@@ -271,6 +293,7 @@
         <a href="#publications">Publications</a>
         <a href="#projects">Research</a>
         <a href="#teaching">Teaching</a>
+        <a href="#personal">Personal</a>
         <a href="#contact">Contact</a>
       </div>
     </nav>
@@ -278,9 +301,15 @@
 
   <main id="top">
     <section id="about">
-      <!-- To add a photo later: remove "no-photo" below and insert
-           <img class="portrait" src="photo.jpg" alt="Portrait of Adam Murdock Gale"> as the first child. -->
-      <div class="container hero no-photo">
+      <div class="container hero">
+        <!-- Placeholder portrait. To use a real photo, replace this whole <div> with:
+             <img class="portrait" src="photo.jpg" alt="Portrait of Adam Murdock Gale"> -->
+        <div class="portrait portrait-placeholder" role="img" aria-label="Portrait placeholder">
+          <svg viewBox="0 0 100 100" width="55%" aria-hidden="true">
+            <circle cx="50" cy="36" r="18" fill="currentColor"/>
+            <path d="M14 92c4-20 18-30 36-30s32 10 36 30z" fill="currentColor"/>
+          </svg>
+        </div>
         <div>
           <h1>Adam Murdock Gale</h1>
           <div class="subtitle">MSc Candidate · Department of Computer Science · University of Western Ontario</div>
@@ -304,7 +333,7 @@
           <div class="actions">
             <a class="button primary" href="#publications">View publications</a>
             <!-- <a class="button" href="cv.pdf">Download CV</a> -->
-            <a class="button" href="mailto:agale9@uwo.ca">Email</a>
+            <a class="button" href="#contact">Contact</a>
           </div>
         </div>
       </div>
@@ -320,6 +349,7 @@
           <div>
             <h3>Parallel Computations of Transversal Hypergraphs</h3>
             <p><strong>A. M. Gale</strong>, M. Moreno Maza. <em>International Congress on Mathematical Software (ICMS 2026)</em>, Lecture Notes in Computer Science, Springer.</p>
+            <p class="links"><a href="https://icms-conference.org/2026/papers/paper63/main.pdf">PDF</a> · <a href="papers/Gale_ICMS_2026_Slides.pdf">Slides</a> · <a href="https://www.bpaslib.org/">Code (BPAS)</a></p>
           </div>
         </article>
 
@@ -329,14 +359,15 @@
           <div>
             <h3>A Maple library for computing with partially ordered sets <span class="tag">Maple 2025</span></h3>
             <p>Partially Ordered Sets package, released in Maple 2025 (Maplesoft). Developed with M. Moreno Maza and E. Postma.</p>
-            <p><a href="https://www.maplesoft.com/products/maple/new_features/Maple2025/PDFs/Maple2025-AdvancedMath.pdf">What's New in Maple 2025</a></p>
+            <p class="links"><a href="https://www.maplesoft.com/support/help/maple/view.aspx?path=PartiallyOrderedSets">Maple help: PartiallyOrderedSets</a> · <a href="https://www.maplesoft.com/support/help/maple/view.aspx?path=updates/Maple2025/AdvancedMath#bkmrk0">What's New in Maple 2025</a> · <a href="https://www.maplesoft.com/products/maple/new_features/Maple2025/PDFs/Maple2025-AdvancedMath.pdf">Feature overview (PDF)</a></p>
           </div>
         </article>
         <article class="publication">
           <div class="year">2025</div>
           <div>
             <h3>Efficient implementation of an algorithm for removing redundant constraints from a system of inequalities <span class="tag">Maple 2025</span></h3>
-            <p>Contribution to Maple 2025 (Maplesoft).</p>
+            <p>Contribution to Maple 2025 (Maplesoft), supporting Fourier&ndash;Motzkin projection of polyhedral sets.</p>
+            <p class="links"><a href="https://www.maplesoft.com/support/help/maple/view.aspx?path=PolyhedralSets/Project">Maple help: PolyhedralSets[Project]</a> · <a href="https://www.maplesoft.com/products/maple/new_features/maple2025/#collapse12">Maple 2025 performance improvements</a></p>
           </div>
         </article>
         <article class="publication">
@@ -344,6 +375,7 @@
           <div>
             <h3>Interfacing Maple's interpreter with an external library to support fast computations of hypergraph transversals <span class="tag">Maple 2025</span></h3>
             <p>Contribution to Maple 2025 (Maplesoft).</p>
+            <p class="links"><a href="https://www.maplesoft.com/support/help/maple/view.aspx?path=Hypergraphs/Transversal">Maple help: Hypergraphs[Transversal]</a> · <a href="https://www.maplesoft.com/support/help/maple/view.aspx?path=Hypergraphs">Hypergraphs package</a> · <a href="https://www.maplesoft.com/products/maple/new_features/maple2025/#collapse12">Maple 2025 performance improvements</a></p>
           </div>
         </article>
 
@@ -353,6 +385,7 @@
           <div>
             <h3>Towards an adaptive algorithm for computations of hypergraph transversals</h3>
             <p><strong>A. M. Gale</strong>. BSc thesis, Department of Computer Science, University of Western Ontario. Supervisor: M. Moreno Maza.</p>
+            <p class="links"><a href="papers/Gale_BSc_Thesis_2026.pdf">PDF</a></p>
           </div>
         </article>
         <article class="publication">
@@ -360,6 +393,7 @@
           <div>
             <h3>Implementation techniques for divide-and-conquer computations of hypergraph transversals</h3>
             <p><strong>A. M. Gale</strong>. Western Undergraduate Summer Research Internship (USRI 2025), University of Western Ontario. Supervisor: M. Moreno Maza.</p>
+            <p class="links"><a href="papers/Gale_USRI_2025_Poster.pdf">Poster (PDF)</a></p>
           </div>
         </article>
 
@@ -369,6 +403,7 @@
           <div>
             <h3>Parallel Computations of Transversal Hypergraphs</h3>
             <p>International Congress on Mathematical Software (ICMS 2026), Waterloo, Ontario, July 2026.</p>
+            <p class="links"><a href="papers/Gale_ICMS_2026_Slides.pdf">Slides</a></p>
           </div>
         </article>
         <article class="publication">
@@ -399,6 +434,7 @@
               Eiter and Gottlob's completion algorithm for computing transversal hypergraphs,
               exploiting structure such as &beta;-acyclicity, and integrated into Maple through
               an external library interface.</p>
+            <p class="links"><a href="https://icms-conference.org/2026/papers/paper63/main.pdf">ICMS 2026 paper</a> · <a href="papers/Gale_BSc_Thesis_2026.pdf">BSc thesis</a> · <a href="https://www.bpaslib.org/">BPAS library</a> · <a href="https://www.maplesoft.com/support/help/maple/view.aspx?path=Hypergraphs">Maple Hypergraphs</a></p>
           </article>
           <article class="card">
             <h3>Computer algebra libraries for Maple</h3>
@@ -406,6 +442,7 @@
             <p>Design and implementation of Maple packages shipped in Maple 2025, including a
               library for partially ordered sets and an efficient algorithm for removing redundant
               constraints from systems of linear inequalities.</p>
+            <p class="links"><a href="https://www.maplesoft.com/support/help/maple/view.aspx?path=PartiallyOrderedSets">PartiallyOrderedSets</a> · <a href="https://www.maplesoft.com/support/help/maple/view.aspx?path=PolyhedralSets/Project">PolyhedralSets[Project]</a> · <a href="https://www.maplesoft.com/products/maple/new_features/maple2025/">New in Maple 2025</a></p>
           </article>
         </div>
       </div>
@@ -430,6 +467,15 @@
       </div>
     </section>
 
+    <section id="personal">
+      <div class="container">
+        <h2>Beyond Research</h2>
+        <!-- Placeholder. Ideas: a short paragraph about yourself, then a .grid of .card items
+             (hobbies, music, games, sports, favourite books, a photo or two). -->
+        <p class="personal">A little more about life outside the lab is coming soon.</p>
+      </div>
+    </section>
+
     <!-- News section hidden until there are items to add.
     <section id="news">
       <div class="container">
@@ -446,7 +492,7 @@
       <div class="container">
         <h2>Contact</h2>
         <p>
-          <strong>Email:</strong> <a href="mailto:agale9@uwo.ca">agale9@uwo.ca</a><br>
+          <strong>Email:</strong> agale9 [at] uwo [dot] ca<br>
           <strong>Office:</strong> Middlesex College, Room 327<br>
           <strong>Address:</strong> Department of Computer Science, University of Western Ontario, London, Ontario, Canada N6A 5B7
         </p>
