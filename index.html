@@ -1,1 +1,390 @@
-big ups
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Academic portfolio of [Your Name]">
+  <title>[Your Name] — Academic Profile</title>
+  <style>
+    :root {
+      --ink: #172033;
+      --muted: #667085;
+      --line: #dde2ea;
+      --paper: #ffffff;
+      --wash: #f4f6fa;
+      --accent: #2457a7;
+      --accent-soft: #eaf1fb;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: var(--paper);
+      line-height: 1.65;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .container {
+      width: min(1120px, calc(100% - 40px));
+      margin: 0 auto;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: rgba(255, 255, 255, 0.96);
+      border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(10px);
+    }
+
+    nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 68px;
+      gap: 24px;
+    }
+
+    .brand {
+      color: var(--ink);
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 1.25rem;
+      font-weight: 700;
+    }
+
+    .nav-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 18px;
+      font-size: 0.92rem;
+    }
+
+    .nav-links a { color: var(--muted); }
+
+    main { min-height: 70vh; }
+
+    section {
+      padding: 72px 0;
+      border-bottom: 1px solid var(--line);
+      scroll-margin-top: 84px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      gap: 48px;
+      align-items: start;
+    }
+
+    .portrait {
+      width: 240px;
+      aspect-ratio: 1;
+      object-fit: cover;
+      border-radius: 12px;
+      background: var(--wash);
+      border: 1px solid var(--line);
+    }
+
+    .portrait-placeholder {
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      text-align: center;
+      font-size: 0.9rem;
+    }
+
+    h1, h2, h3 {
+      font-family: Georgia, "Times New Roman", serif;
+      line-height: 1.2;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(2.2rem, 5vw, 4rem);
+      letter-spacing: -0.02em;
+    }
+
+    h2 {
+      margin: 0 0 28px;
+      font-size: 2rem;
+    }
+
+    h3 {
+      margin: 0 0 6px;
+      font-size: 1.25rem;
+    }
+
+    .subtitle {
+      color: var(--accent);
+      font-size: 1.12rem;
+      font-weight: 700;
+    }
+
+    .bio {
+      max-width: 720px;
+      margin: 24px 0;
+      color: #39465a;
+      font-size: 1.05rem;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 24px;
+    }
+
+    .button {
+      display: inline-block;
+      padding: 9px 14px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      color: var(--ink);
+      background: var(--paper);
+      font-weight: 700;
+      font-size: 0.92rem;
+    }
+
+    .button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+
+    .button:hover { text-decoration: none; transform: translateY(-1px); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 24px;
+    }
+
+    .card {
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--paper);
+    }
+
+    .card p { margin: 8px 0 0; color: var(--muted); }
+
+    .meta {
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .publication {
+      display: grid;
+      grid-template-columns: 90px 1fr;
+      gap: 18px;
+      padding: 18px 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .publication:last-child { border-bottom: 1px solid var(--line); }
+
+    .year {
+      color: var(--accent);
+      font-weight: 800;
+    }
+
+    .publication p { margin: 4px 0 0; color: var(--muted); }
+
+    .news-item {
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      gap: 20px;
+      padding: 14px 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .news-item:last-child { border-bottom: 1px solid var(--line); }
+
+    .news-date { color: var(--muted); }
+
+    footer {
+      padding: 28px 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    footer .container {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    @media (max-width: 760px) {
+      nav { align-items: flex-start; padding: 14px 0; }
+      .nav-links { justify-content: flex-end; gap: 10px 14px; }
+      section { padding: 52px 0; }
+      .hero { grid-template-columns: 1fr; gap: 28px; }
+      .portrait { width: 180px; }
+      .grid { grid-template-columns: 1fr; }
+      .publication, .news-item { grid-template-columns: 1fr; gap: 4px; }
+      footer .container { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <nav class="container" aria-label="Primary navigation">
+      <a class="brand" href="#top">[Your Name]</a>
+      <div class="nav-links">
+        <a href="#about">About</a>
+        <a href="#publications">Publications</a>
+        <a href="#projects">Projects</a>
+        <a href="#teaching">Teaching</a>
+        <a href="#news">News</a>
+        <a href="#contact">Contact</a>
+      </div>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section id="about">
+      <div class="container hero">
+        <div class="portrait portrait-placeholder" role="img" aria-label="Portrait placeholder">
+          <span>[Your Photo]</span>
+        </div>
+        <div>
+          <h1>[Your Name]</h1>
+          <div class="subtitle">[Position] · [Department] · [University]</div>
+          <p class="bio">
+            [Write a brief academic biography here. Describe your research interests,
+            current position, and the questions that drive your work.] 
+          </p>
+          <div class="actions">
+            <a class="button primary" href="#publications">View publications</a>
+            <a class="button" href="[CV URL]">Download CV</a>
+            <a class="button" href="mailto:[email]">Email</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="publications">
+      <div class="container">
+        <h2>Selected Publications</h2>
+
+        <article class="publication">
+          <div class="year">2026</div>
+          <div>
+            <h3>[Publication title]</h3>
+            <p>[Authors]. <em>[Journal or conference]</em>, [volume/issue], [pages].</p>
+            <p><a href="#">PDF</a> · <a href="#">DOI</a> · <a href="#">BibTeX</a></p>
+          </div>
+        </article>
+
+        <article class="publication">
+          <div class="year">2025</div>
+          <div>
+            <h3>[Publication title]</h3>
+            <p>[Authors]. <em>[Journal or conference]</em>, [volume/issue], [pages].</p>
+            <p><a href="#">PDF</a> · <a href="#">DOI</a> · <a href="#">BibTeX</a></p>
+          </div>
+        </article>
+
+        <article class="publication">
+          <div class="year">2024</div>
+          <div>
+            <h3>[Publication title]</h3>
+            <p>[Authors]. <em>[Journal or conference]</em>, [volume/issue], [pages].</p>
+            <p><a href="#">PDF</a> · <a href="#">DOI</a> · <a href="#">BibTeX</a></p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section id="projects">
+      <div class="container">
+        <h2>Research &amp; Projects</h2>
+        <div class="grid">
+          <article class="card">
+            <h3>[Project name]</h3>
+            <div class="meta">[Dates] · [Funding or collaborators]</div>
+            <p>[Describe the project, its methods, and its primary outcomes or goals.]</p>
+          </article>
+          <article class="card">
+            <h3>[Project name]</h3>
+            <div class="meta">[Dates] · [Funding or collaborators]</div>
+            <p>[Describe the project, its methods, and its primary outcomes or goals.]</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="teaching">
+      <div class="container">
+        <h2>Teaching</h2>
+        <div class="grid">
+          <article class="card">
+            <h3>[Course title]</h3>
+            <div class="meta">[Semester] · [Course code]</div>
+            <p>[Course level, format, and a short description.]</p>
+          </article>
+          <article class="card">
+            <h3>[Course title]</h3>
+            <div class="meta">[Semester] · [Course code]</div>
+            <p>[Course level, format, and a short description.]</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="news">
+      <div class="container">
+        <h2>News</h2>
+        <div class="news-item">
+          <div class="news-date">Month 2026</div>
+          <div>[Add an award, publication, talk, grant, or other update.]</div>
+        </div>
+        <div class="news-item">
+          <div class="news-date">Month 2026</div>
+          <div>[Add an award, publication, talk, grant, or other update.]</div>
+        </div>
+        <div class="news-item">
+          <div class="news-date">Month 2025</div>
+          <div>[Add an award, publication, talk, grant, or other update.]</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="contact">
+      <div class="container">
+        <h2>Contact</h2>
+        <p>
+          <strong>Email:</strong> <a href="mailto:[email]">[email]</a><br>
+          <strong>Office:</strong> [Building, room number]<br>
+          <strong>Address:</strong> [Department], [University], [City, region, postal code]
+        </p>
+        <p>
+          <a href="[Google Scholar URL]">Google Scholar</a> ·
+          <a href="[ORCID URL]">ORCID</a> ·
+          <a href="[GitHub URL]">GitHub</a> ·
+          <a href="[LinkedIn URL]">LinkedIn</a>
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <span>© <span id="year">2026</span> [Your Name]</span>
+      <span>Last updated: [Month Year]</span>
+    </div>
+  </footer>
+
+  <script>
+    document.getElementById("year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>
