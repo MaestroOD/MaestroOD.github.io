@@ -58,11 +58,16 @@
     }
 
     .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
       color: var(--accent);
       font-family: Georgia, "Times New Roman", serif;
       font-size: 1.25rem;
       font-weight: 700;
     }
+
+    .chao { height: 40px; width: auto; flex: none; }
 
     .nav-links {
       display: flex;
@@ -287,7 +292,9 @@
 <body>
   <header>
     <nav class="container" aria-label="Primary navigation">
-      <a class="brand" href="#top">Adam Murdock Gale</a>
+      <a class="brand" href="#top">Adam Murdock Gale
+        <img class="chao" src="images/dark-chao.png" alt="Dark chao" width="38" height="40">
+      </a>
       <div class="nav-links">
         <a href="#about">About</a>
         <a href="#publications">Publications</a>
@@ -470,9 +477,7 @@
     <section id="personal">
       <div class="container">
         <h2>Beyond Research</h2>
-        <!-- Placeholder. Ideas: a short paragraph about yourself, then a .grid of .card items
-             (hobbies, music, games, sports, favourite books, a photo or two). -->
-        <p class="personal">A little more about life outside the lab is coming soon.</p>
+        <p class="personal">Married, love board games (Pandemic, Gloomhaven, Spirit Island), love puzzles (NYT games, etc.), have a fat cat named Maestrood.</p>
       </div>
     </section>
 
