@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Academic portfolio of [Your Name]">
-  <title>[Your Name] — Academic Profile</title>
+  <meta name="description" content="Adam Murdock Gale — MSc candidate in Computer Science at the University of Western Ontario, working on computer algebra and high performance computing.">
+  <title>Adam Murdock Gale — Academic Profile</title>
   <style>
     :root {
       --ink: #172033;
@@ -222,6 +222,34 @@
       gap: 20px;
     }
 
+    .hero.no-photo { grid-template-columns: 1fr; }
+
+    h2 + h3.group, h3.group {
+      margin: 36px 0 4px;
+      color: var(--muted);
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    h2 + h3.group { margin-top: 0; }
+
+    .tag {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 1px 8px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 0.78rem;
+      font-weight: 700;
+      vertical-align: middle;
+    }
+
+    .interests { margin: 0; padding-left: 20px; color: #39465a; }
+
     @media (max-width: 760px) {
       nav { align-items: flex-start; padding: 14px 0; }
       .nav-links { justify-content: flex-end; gap: 10px 14px; }
@@ -237,13 +265,12 @@
 <body>
   <header>
     <nav class="container" aria-label="Primary navigation">
-      <a class="brand" href="#top">[Your Name]</a>
+      <a class="brand" href="#top">Adam Murdock Gale</a>
       <div class="nav-links">
         <a href="#about">About</a>
         <a href="#publications">Publications</a>
-        <a href="#projects">Projects</a>
+        <a href="#projects">Research</a>
         <a href="#teaching">Teaching</a>
-        <a href="#news">News</a>
         <a href="#contact">Contact</a>
       </div>
     </nav>
@@ -251,21 +278,33 @@
 
   <main id="top">
     <section id="about">
-      <div class="container hero">
-        <div class="portrait portrait-placeholder" role="img" aria-label="Portrait placeholder">
-          <span>[Your Photo]</span>
-        </div>
+      <!-- To add a photo later: remove "no-photo" below and insert
+           <img class="portrait" src="photo.jpg" alt="Portrait of Adam Murdock Gale"> as the first child. -->
+      <div class="container hero no-photo">
         <div>
-          <h1>[Your Name]</h1>
-          <div class="subtitle">[Position] · [Department] · [University]</div>
+          <h1>Adam Murdock Gale</h1>
+          <div class="subtitle">MSc Candidate · Department of Computer Science · University of Western Ontario</div>
           <p class="bio">
-            [Write a brief academic biography here. Describe your research interests,
-            current position, and the questions that drive your work.] 
+            I am an MSc candidate in Computer Science at the University of Western Ontario,
+            supervised by Professor Marc Moreno Maza and a member of the
+            <a href="https://orcca.on.ca/">Ontario Research Centre for Computer Algebra (ORCCA)</a>.
+            My research sits at the intersection of computer algebra and high performance computing:
+            I design and implement efficient, parallel algorithms for combinatorial and algebraic
+            problems, with a focus on computing hypergraph transversals, and I build libraries that
+            ship in the Maple computer algebra system. I am also interested in the scholarship of
+            teaching and learning, and I am developing my teaching practice through the Western
+            Certificate in University Teaching and Learning. I completed my BSc in Computer Science
+            at Western in 2026.
           </p>
+          <ul class="interests">
+            <li>Computer algebra and symbolic computation</li>
+            <li>High performance and parallel computing</li>
+            <li>Scholarship of teaching and learning</li>
+          </ul>
           <div class="actions">
             <a class="button primary" href="#publications">View publications</a>
-            <a class="button" href="[CV URL]">Download CV</a>
-            <a class="button" href="mailto:[email]">Email</a>
+            <!-- <a class="button" href="cv.pdf">Download CV</a> -->
+            <a class="button" href="mailto:agale9@uwo.ca">Email</a>
           </div>
         </div>
       </div>
@@ -273,32 +312,77 @@
 
     <section id="publications">
       <div class="container">
-        <h2>Selected Publications</h2>
+        <h2>Publications &amp; Contributions</h2>
 
+        <h3 class="group">Peer-reviewed proceedings</h3>
         <article class="publication">
           <div class="year">2026</div>
           <div>
-            <h3>[Publication title]</h3>
-            <p>[Authors]. <em>[Journal or conference]</em>, [volume/issue], [pages].</p>
-            <p><a href="#">PDF</a> · <a href="#">DOI</a> · <a href="#">BibTeX</a></p>
+            <h3>Parallel Computations of Transversal Hypergraphs</h3>
+            <p><strong>A. M. Gale</strong>, M. Moreno Maza. <em>International Congress on Mathematical Software (ICMS 2026)</em>, Lecture Notes in Computer Science, Springer.</p>
           </div>
         </article>
 
+        <h3 class="group">Software contributions</h3>
         <article class="publication">
           <div class="year">2025</div>
           <div>
-            <h3>[Publication title]</h3>
-            <p>[Authors]. <em>[Journal or conference]</em>, [volume/issue], [pages].</p>
-            <p><a href="#">PDF</a> · <a href="#">DOI</a> · <a href="#">BibTeX</a></p>
+            <h3>A Maple library for computing with partially ordered sets <span class="tag">Maple 2025</span></h3>
+            <p>Partially Ordered Sets package, released in Maple 2025 (Maplesoft). Developed with M. Moreno Maza and E. Postma.</p>
+            <p><a href="https://www.maplesoft.com/products/maple/new_features/Maple2025/PDFs/Maple2025-AdvancedMath.pdf">What's New in Maple 2025</a></p>
+          </div>
+        </article>
+        <article class="publication">
+          <div class="year">2025</div>
+          <div>
+            <h3>Efficient implementation of an algorithm for removing redundant constraints from a system of inequalities <span class="tag">Maple 2025</span></h3>
+            <p>Contribution to Maple 2025 (Maplesoft).</p>
+          </div>
+        </article>
+        <article class="publication">
+          <div class="year">2025</div>
+          <div>
+            <h3>Interfacing Maple's interpreter with an external library to support fast computations of hypergraph transversals <span class="tag">Maple 2025</span></h3>
+            <p>Contribution to Maple 2025 (Maplesoft).</p>
           </div>
         </article>
 
+        <h3 class="group">Theses &amp; posters</h3>
         <article class="publication">
-          <div class="year">2024</div>
+          <div class="year">2026</div>
           <div>
-            <h3>[Publication title]</h3>
-            <p>[Authors]. <em>[Journal or conference]</em>, [volume/issue], [pages].</p>
-            <p><a href="#">PDF</a> · <a href="#">DOI</a> · <a href="#">BibTeX</a></p>
+            <h3>Towards an adaptive algorithm for computations of hypergraph transversals</h3>
+            <p><strong>A. M. Gale</strong>. BSc thesis, Department of Computer Science, University of Western Ontario. Supervisor: M. Moreno Maza.</p>
+          </div>
+        </article>
+        <article class="publication">
+          <div class="year">2025</div>
+          <div>
+            <h3>Implementation techniques for divide-and-conquer computations of hypergraph transversals</h3>
+            <p><strong>A. M. Gale</strong>. Western Undergraduate Summer Research Internship (USRI 2025), University of Western Ontario. Supervisor: M. Moreno Maza.</p>
+          </div>
+        </article>
+
+        <h3 class="group">Talks</h3>
+        <article class="publication">
+          <div class="year">2026</div>
+          <div>
+            <h3>Parallel Computations of Transversal Hypergraphs</h3>
+            <p>International Congress on Mathematical Software (ICMS 2026), Waterloo, Ontario, July 2026.</p>
+          </div>
+        </article>
+        <article class="publication">
+          <div class="year">2026</div>
+          <div>
+            <h3>Structure-Aware Hypergraph Transversal Computation</h3>
+            <p>Western University Research in Computer Science Conference (UWORCS 2026), London, Ontario, April 2026.</p>
+          </div>
+        </article>
+        <article class="publication">
+          <div class="year">2025</div>
+          <div>
+            <h3>Maple 2025: Partially Ordered Sets</h3>
+            <p>Western University Research in Computer Science Conference (UWORCS 2025), London, Ontario.</p>
           </div>
         </article>
       </div>
@@ -306,17 +390,22 @@
 
     <section id="projects">
       <div class="container">
-        <h2>Research &amp; Projects</h2>
+        <h2>Research</h2>
         <div class="grid">
           <article class="card">
-            <h3>[Project name]</h3>
-            <div class="meta">[Dates] · [Funding or collaborators]</div>
-            <p>[Describe the project, its methods, and its primary outcomes or goals.]</p>
+            <h3>Parallel computation of hypergraph transversals</h3>
+            <div class="meta">2025–present · ORCCA, with M. Moreno Maza</div>
+            <p>Optimized, parallel C implementations of Berge's divide-and-conquer algorithm and
+              Eiter and Gottlob's completion algorithm for computing transversal hypergraphs,
+              exploiting structure such as &beta;-acyclicity, and integrated into Maple through
+              an external library interface.</p>
           </article>
           <article class="card">
-            <h3>[Project name]</h3>
-            <div class="meta">[Dates] · [Funding or collaborators]</div>
-            <p>[Describe the project, its methods, and its primary outcomes or goals.]</p>
+            <h3>Computer algebra libraries for Maple</h3>
+            <div class="meta">2024–2025 · ORCCA and Maplesoft</div>
+            <p>Design and implementation of Maple packages shipped in Maple 2025, including a
+              library for partially ordered sets and an efficient algorithm for removing redundant
+              constraints from systems of linear inequalities.</p>
           </article>
         </div>
       </div>
@@ -327,50 +416,45 @@
         <h2>Teaching</h2>
         <div class="grid">
           <article class="card">
-            <h3>[Course title]</h3>
-            <div class="meta">[Semester] · [Course code]</div>
-            <p>[Course level, format, and a short description.]</p>
+            <h3>Computer Architecture</h3>
+            <div class="meta">Fall 2026 · CS 3350A · Graduate Teaching Assistant</div>
+            <p>Undergraduate course, Department of Computer Science, University of Western Ontario.</p>
           </article>
           <article class="card">
-            <h3>[Course title]</h3>
-            <div class="meta">[Semester] · [Course code]</div>
-            <p>[Course level, format, and a short description.]</p>
+            <h3>Western Certificate in University Teaching and Learning</h3>
+            <div class="meta">In progress · Centre for Teaching and Learning, Western</div>
+            <p>Graduate teaching development program covering microteaching, pedagogy workshops,
+              and a teaching dossier.</p>
           </article>
         </div>
       </div>
     </section>
 
+    <!-- News section hidden until there are items to add.
     <section id="news">
       <div class="container">
         <h2>News</h2>
         <div class="news-item">
-          <div class="news-date">Month 2026</div>
-          <div>[Add an award, publication, talk, grant, or other update.]</div>
-        </div>
-        <div class="news-item">
-          <div class="news-date">Month 2026</div>
-          <div>[Add an award, publication, talk, grant, or other update.]</div>
-        </div>
-        <div class="news-item">
-          <div class="news-date">Month 2025</div>
-          <div>[Add an award, publication, talk, grant, or other update.]</div>
+          <div class="news-date">Month Year</div>
+          <div>Update text.</div>
         </div>
       </div>
     </section>
+    -->
 
     <section id="contact">
       <div class="container">
         <h2>Contact</h2>
         <p>
-          <strong>Email:</strong> <a href="mailto:[email]">[email]</a><br>
-          <strong>Office:</strong> [Building, room number]<br>
-          <strong>Address:</strong> [Department], [University], [City, region, postal code]
+          <strong>Email:</strong> <a href="mailto:agale9@uwo.ca">agale9@uwo.ca</a><br>
+          <strong>Office:</strong> Middlesex College, Room 327<br>
+          <strong>Address:</strong> Department of Computer Science, University of Western Ontario, London, Ontario, Canada N6A 5B7
         </p>
         <p>
-          <a href="[Google Scholar URL]">Google Scholar</a> ·
-          <a href="[ORCID URL]">ORCID</a> ·
-          <a href="[GitHub URL]">GitHub</a> ·
-          <a href="[LinkedIn URL]">LinkedIn</a>
+          <a href="https://scholar.google.ca/citations?user=vX6r0oEAAAAJ">Google Scholar</a> ·
+          <a href="https://orcid.org/0009-0008-1850-6006">ORCID</a> ·
+          <a href="https://github.com/MaestroOD">GitHub</a> ·
+          <a href="https://orcca.on.ca/">ORCCA</a>
         </p>
       </div>
     </section>
@@ -378,8 +462,8 @@
 
   <footer>
     <div class="container">
-      <span>© <span id="year">2026</span> [Your Name]</span>
-      <span>Last updated: [Month Year]</span>
+      <span>© <span id="year">2026</span> Adam Murdock Gale</span>
+      <span>Last updated: November 2026</span>
     </div>
   </footer>
 
