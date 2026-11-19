@@ -7,19 +7,26 @@
   <title>Adam Murdock Gale — Academic Profile</title>
   <style>
     :root {
-      /* Western University palette: Western Purple #4F2683, Western Silver #807F83 */
       color-scheme: dark;
-      --ink: #ece8f3;
-      --body-text: #d4cfdd;
-      --muted: #aaa4b8;
-      --line: #2f2841;
-      --paper: #15121d;
-      --wash: #1d1829;
-      --brand: #4f2683;        /* Western Purple, for filled areas */
-      --accent: #b99de3;       /* lighter purple, readable on dark */
-      --accent-dark: #3a1c61;
-      --accent-soft: #2b2140;
-      --silver: #807f83;
+
+      /* Western University brand colours
+         https://brand.westernu.ca/visual-identity/colours.html */
+      --western-purple: #4f2683;   /* primary */
+      --white: #ffffff;            /* primary */
+      --orchid: #8f55e0;           /* secondary */
+      --deep-focus: #201436;       /* secondary */
+      --grey: #818284;             /* secondary */
+      --sky: #7deafb;              /* accent: small details only */
+
+      /* How the site uses them */
+      --paper: var(--deep-focus);              /* page background */
+      --wash: #301a51;                         /* Western Purple at 35% over Deep Focus */
+      --ink: var(--white);                     /* headings, primary text */
+      --body-text: rgba(255, 255, 255, 0.85);  /* paragraphs */
+      --muted: rgba(255, 255, 255, 0.70);      /* secondary text */
+      --line: var(--western-purple);           /* dividers, card borders */
+      --brand: var(--western-purple);          /* header bar, primary button, tags */
+      --accent: var(--orchid);                 /* decoration only: underlines, rules (3.7:1 on Deep Focus, too low for small text) */
     }
 
     * { box-sizing: border-box; }
@@ -34,8 +41,14 @@
       line-height: 1.65;
     }
 
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
+    a {
+      color: var(--ink);
+      text-decoration: underline;
+      text-decoration-color: var(--accent);
+      text-decoration-thickness: 2px;
+      text-underline-offset: 3px;
+    }
+    a:hover { text-decoration-color: var(--sky); }
 
     .container {
       width: min(1120px, calc(100% - 40px));
@@ -46,10 +59,8 @@
       position: sticky;
       top: 0;
       z-index: 10;
-      background: rgba(21, 18, 29, 0.92);
-      border-top: 5px solid var(--brand);
-      border-bottom: 1px solid var(--line);
-      backdrop-filter: blur(10px);
+      background: var(--brand);
+      border-bottom: 3px solid var(--accent);
     }
 
     nav {
@@ -64,7 +75,8 @@
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      color: var(--accent);
+      color: var(--ink);
+      text-decoration: none;
       font-family: Georgia, "Times New Roman", serif;
       font-size: 1.25rem;
       font-weight: 700;
@@ -79,12 +91,12 @@
       font-size: 0.92rem;
     }
 
-    .nav-links a { color: var(--muted); }
-    .nav-links a:hover { color: var(--accent); }
+    .nav-links a { color: var(--body-text); text-decoration: none; }
+    .nav-links a:hover { color: var(--ink); text-decoration: underline; text-decoration-color: var(--sky); }
 
     #about { background: linear-gradient(180deg, var(--wash), var(--paper)); }
 
-    h2 { color: var(--accent); }
+    h2 { color: var(--ink); }
 
     h2::after {
       content: "";
@@ -92,7 +104,7 @@
       width: 48px;
       height: 3px;
       margin-top: 12px;
-      background: var(--silver);
+      background: var(--accent);
     }
 
     main { min-height: 70vh; }
@@ -132,7 +144,7 @@
     .portrait-placeholder {
       display: grid;
       place-items: center;
-      color: #4a3f60;
+      color: var(--western-purple);
       text-align: center;
       font-size: 0.9rem;
     }
@@ -159,7 +171,7 @@
     }
 
     .subtitle {
-      color: var(--accent);
+      color: var(--ink);
       font-size: 1.12rem;
       font-weight: 700;
     }
@@ -181,10 +193,11 @@
     .button {
       display: inline-block;
       padding: 9px 14px;
-      border: 1px solid var(--line);
+      border: 1px solid var(--grey);
       border-radius: 7px;
       color: var(--ink);
-      background: var(--paper);
+      text-decoration: none;
+      background: transparent;
       font-weight: 700;
       font-size: 0.92rem;
     }
@@ -192,11 +205,11 @@
     .button.primary {
       background: var(--brand);
       border-color: var(--brand);
-      color: white;
+      color: var(--white);
     }
 
     .button:hover { text-decoration: none; transform: translateY(-1px); border-color: var(--accent); }
-    .button.primary:hover { background: var(--accent-dark); }
+    .button.primary:hover { background: var(--accent); border-color: var(--accent); }
 
     .links { font-size: 0.92rem; }
     .links a { font-weight: 600; }
@@ -234,7 +247,10 @@
     .publication:last-child { border-bottom: 1px solid var(--line); }
 
     .year {
-      color: var(--accent);
+      align-self: start;
+      padding-left: 10px;
+      border-left: 3px solid var(--accent);
+      color: var(--ink);
       font-weight: 800;
     }
 
@@ -281,8 +297,8 @@
       margin-left: 6px;
       padding: 1px 8px;
       border-radius: 999px;
-      background: var(--accent-soft);
-      color: var(--accent);
+      background: var(--brand);
+      color: var(--white);
       font-size: 0.78rem;
       font-weight: 700;
       vertical-align: middle;
