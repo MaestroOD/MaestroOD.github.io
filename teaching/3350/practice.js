@@ -117,6 +117,7 @@
   function inputsOf(f) { return body.querySelectorAll("[data-f=\"" + f.id + "\"]"); }
   /* What the student typed for a field: a string, or for a cache set one array of cells per line */
   function rawValue(f) {
+    if (f.parts) return f.parts.map(function (pt) { var el = document.getElementById("ans-" + f.id + "__" + pt); return el ? el.value : ""; });
     if (f.kind !== "cacheset") { var el = document.getElementById("ans-" + f.id); return el ? el.value : ""; }
     var lines = [];
     for (var w = 0; w < f.ways; w++) {

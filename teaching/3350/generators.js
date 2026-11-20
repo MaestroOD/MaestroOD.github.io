@@ -391,6 +391,29 @@
     }
     return Infinity;
   }
+  /* One optimal schedule for a two-issue machine (one ALU slot, one load/store slot):
+     returns [[aluInstr|null, memInstr|null], ...] per cycle. */
+  function bestSchedule(preds, types) {
+    var n = preds.length, full = (1 << n) - 1, prev = {}, queue = [0];
+    prev[0] = null;
+    while (queue.length) {
+      var s = queue.shift();
+      if (s === full) break;
+      var ready = [];
+      for (var i = 0; i < n; i++) if (!(s & (1 << i)) && preds[i].every(function (q) { return s & (1 << q); })) ready.push(i);
+      var alu = ready.filter(function (i2) { return types[i2] === "alu"; }), mem = ready.filter(function (i3) { return types[i3] === "mem"; });
+      (alu.length ? alu : [null]).forEach(function (a) {
+        (mem.length ? mem : [null]).forEach(function (m) {
+          var t = s; if (a !== null) t |= 1 << a; if (m !== null) t |= 1 << m;
+          if (t !== s && prev[t] === undefined) { prev[t] = { from: s, pick: [a, m] }; queue.push(t); }
+        });
+      });
+    }
+    var out = [], cur = full;
+    while (prev[cur]) { out.unshift(prev[cur].pick); cur = prev[cur].from; }
+    return out;
+  }
+
   function combos(a, k) {
     if (k === 0) return [[]];
     if (a.length < k) return [];
@@ -835,7 +858,33 @@
 
 
   /* ----- 3. Cache organization ----- */
-  G["caches/address-bits"] = variants([
+  /* Exam style: break each address into tag / index / offset and say whether it hits. */
+  function addressTable(R) {
+    var m = R.pick([8, 12]), ob = R.int(1, 2), ib = R.int(2, 3), tb = m - ob - ib, sets = 1 << ib, block = 1 << ob;
+    var addrs = [];
+    for (var i = 0; i < 6; i++) {
+      var a = addrs.length && R.chance(0.45) ? (R.pick(addrs) ^ R.int(0, block - 1)) : R.int(0, (1 << m) - 1);
+      addrs.push(a & ((1 << m) - 1));
+    }
+    var sim = simulateCache({ ways: 1, sets: sets, block: block, policy: "lru" }, addrs), fields = [], rows = [];
+    addrs.forEach(function (a, i) {
+      var off = a & (block - 1), idx = (a >> ob) & (sets - 1), tag = a >> (ob + ib);
+      fields.push(num("t" + i, "tag", tag, { size: 4 }), num("i" + i, "index", idx, { size: 4 }), num("o" + i, "offset", off, { size: 4 }),
+        choice("h" + i, "result", ["hit", "miss"], sim.steps[i].hit ? "hit" : "miss"));
+      rows.push([code(hex(a, m / 4)), { f: "t" + i }, { f: "i" + i }, { f: "o" + i }, { f: "h" + i }]);
+    });
+    return {
+      prompt: p("A direct-mapped cache uses " + m + "-bit byte addresses: a " + tb + "-bit tag, a " + ib + "-bit index and a " + ob + "-bit offset. It starts empty. For each address in order, give its tag, index and offset (in decimal) and whether it hits."),
+      table: { head: ["Address", "Tag", "Index", "Offset", "Hit/miss"], rows: rows },
+      fields: fields, wide: true,
+      solution: table(["Address", "Binary", "Tag", "Index", "Offset", "Result"], addrs.map(function (a, i) {
+        return [hex(a, m / 4), code(bin(a >> (ob + ib), tb) + " " + bin((a >> ob) & (sets - 1), ib) + " " + bin(a & (block - 1), ob)),
+          a >> (ob + ib), (a >> ob) & (sets - 1), a & (block - 1), "<strong>" + (sim.steps[i].hit ? "hit" : "miss") + "</strong>"];
+      })) + p("An access hits when its line already holds the same tag.")
+    };
+  }
+
+  G["caches/address-bits"] = variants([addressTable, addressTable,
     function (R) {
       var abits = R.pick([16, 32]), size = Math.pow(2, abits === 16 ? R.int(8, 12) : R.int(10, 15));
       var block = Math.pow(2, R.int(2, 6)), blocks = size / block, assoc = R.pick([1, 2, 4, 8].filter(function (a) { return a <= blocks; }));
@@ -1422,6 +1471,27 @@
     addi: "addi $t0, $t1, -12", ori: "ori $s2, $s3, 255", lw: "lw $t1, 8($s0)", sw: "sw $t2, 16($sp)", beq: "beq $t0, $t1, loop", j: "j loop" };
   G["datapath/control-signals"] = variants([
     function (R) {
+      /* one row per signal, one column per instruction (like the control table on the cheat sheet) */
+      var ms = R.shuffle(Object.keys(CONTROL)).slice(0, 3), fields = [], rows = [];
+      SIGNALS.forEach(function (sg, k) {
+        var row = [sg[0]];
+        ms.forEach(function (m, r) {
+          var vals = CONTROL[m], opts = sg[1].indexOf("x") === -1 && vals[k] === "x" ? sg[1].concat(["x"]) : sg[1];
+          fields.push(choice("c" + r + "_" + k, m + " " + sg[0], opts, vals[k], { any: vals[k] === "x" }));
+          row.push({ f: "c" + r + "_" + k });
+        });
+        rows.push(row);
+      });
+      return {
+        prompt: p("For the single-cycle MIPS datapath from lecture, fill in every control signal for each instruction. Pick x where the value does not matter (any value is accepted there)."),
+        table: { head: ["Signal"].concat(ms.map(function (m) { return code(SAMPLE[m]); })), rows: rows },
+        fields: fields,
+        solution: table(["Signal"].concat(ms.map(function (m) { return code(SAMPLE[m]); })), SIGNALS.map(function (sg, k) {
+          return [sg[0]].concat(ms.map(function (m) { return "<strong>" + CONTROL[m][k] + "</strong>"; }));
+        }))
+      };
+    },
+    function (R) {
       var m = R.pick(Object.keys(CONTROL)), vals = CONTROL[m];
       return {
         prompt: p("For the single-cycle MIPS datapath from lecture, give every control signal while executing " + code(SAMPLE[m]) + ". Pick x where the value does not matter (any value is accepted there)."),
@@ -1569,7 +1639,42 @@
     { t: "lw $t0, 0($s0) is followed by sw $t1, 4($s0) (neither uses the other's registers).", a: "no hazard" },
     { t: "j Loop is fetched, and the instruction after it in memory has already entered the pipeline.", a: "control hazard" }
   ];
-  G["pipelining/stalls"] = variants([
+  /* Exam style: fill in the stage of every instruction in every cycle. A stalled instruction waits
+     in ID (repeating it) and the instruction behind it waits in IF. */
+  function pipelineDiagram(R) {
+    var fwd = R.chance(0.5), ins, res;
+    R.until(function () { ins = randomDepCode(R, 3, ["$t0", "$t1", "$t2", "$s0"]); res = pipelineStalls(ins, fwd); return true; },
+      function () { return res.stalls >= 1 && res.stalls <= 4; });
+    var D = res.D, total = res.cycles, fields = [], rows = [], solRows = [], idStart = [];
+    ins.forEach(function (it, i) {
+      var ifStart = i === 0 ? 1 : idStart[i - 1];
+      idStart[i] = i === 0 ? 2 : D[i - 1] + 2;
+      var cells = [], parts = [];
+      for (var c = 1; c <= total; c++) {
+        var st = "";
+        if (c >= ifStart && c < idStart[i]) st = "IF";
+        else if (c >= idStart[i] && c <= D[i] + 1) st = "ID";
+        else if (c === D[i] + 2) st = "EX";
+        else if (c === D[i] + 3) st = "MEM";
+        else if (c === D[i] + 4) st = "WB";
+        cells.push(st); parts.push(String(c - 1));
+      }
+      fields.push({ id: "r" + i, label: it.text, kind: "cells", parts: parts, answer: cells, size: 3 });
+      rows.push([code(it.text)].concat(parts.map(function (pt) { return { f: "r" + i, part: pt }; })).concat([{ mark: "r" + i }]));
+      solRows.push([code(it.text)].concat(cells.map(function (x) { return x || "·"; })));
+    });
+    var head = ["Instruction"]; for (var c2 = 1; c2 <= total; c2++) head.push(c2);
+    return {
+      prompt: p("These instructions run on the classic 5-stage pipeline " + (fwd ? "<strong>with forwarding</strong> (results reach the start of EX; a loaded value is ready after MEM)" : "<strong>without forwarding</strong>") +
+        ". Registers are written in the first half of a cycle and read in the second half.") +
+        p("Fill in each instruction's stage in every cycle (IF, ID, EX, MEM, WB). A stalled instruction repeats ID, and the instruction behind it repeats IF. Leave a cell blank when the instruction is not in the pipeline."),
+      table: { head: head.concat([""]), rows: rows },
+      fields: fields, wide: true,
+      solution: table(head, solRows) + p(res.stalls + " stall cycle" + (res.stalls === 1 ? "" : "s") + "; " + total + " cycles in total.")
+    };
+  }
+
+  G["pipelining/stalls"] = variants([pipelineDiagram,
     function (R) {
       var ins, a, b;
       R.until(function () { ins = randomDepCode(R, 4, ["$t0", "$t1", "$t2", "$s0"]); a = pipelineStalls(ins, false); b = pipelineStalls(ins, true); return true; }, function () { return a.stalls > 0; });
@@ -1602,11 +1707,30 @@
       if (op === "addi") { var im = R.int(1, 30); text = "addi " + d + ", " + s1 + ", " + im; ren = "addi V" + next + ", " + map[s1] + ", " + im; src = [s1]; }
       else { text = op + " " + d + ", " + s1 + ", " + s2; ren = op + " V" + next + ", " + map[s1] + ", " + map[s2]; src = s1 === s2 ? [s1] : [s1, s2]; }
       map[d] = "V" + next; next++;
-      ins.push({ text: text, ren: ren, dst: d, src: src });
+      ins.push({ text: text, ren: ren, dst: d, src: src, name: map[d] });
     }
     return { regs: regs, ins: ins, map: map };
   }
-  G["ilp/renaming"] = variants([function (R) {
+  /* Exam style: the value name each register gets, column by column, plus the renamed instruction. */
+  function renameTable(R) {
+    var run = renameRun(R), fields = [], rows = [["Initially"].concat(run.regs.map(function (r, k) { return "V" + k; })).concat(["", "—"])];
+    run.ins.forEach(function (it, k) {
+      var answer = run.regs.map(function (r) { return r === it.dst ? it.name : ""; });
+      fields.push({ id: "v" + k, label: it.text, kind: "cells", parts: ["0", "1", "2", "3"], answer: answer, size: 3 });
+      fields.push({ id: "r" + k, label: "renamed " + it.text, kind: "text", accept: [it.ren], size: 16 });
+      rows.push([code(it.text)].concat([0, 1, 2, 3].map(function (j) { return { f: "v" + k, part: String(j) }; })).concat([{ mark: "v" + k }, { f: "r" + k }]));
+    });
+    return {
+      prompt: p("Use register renaming: give each result a new value name (V4, V5, … in order). In each row, write the new name under the register that instruction writes (leave the other register columns blank), and write the renamed instruction."),
+      table: { head: ["Instruction"].concat(run.regs).concat(["", "Renamed instruction"]), rows: rows },
+      fields: fields, wide: true,
+      solution: table(["Instruction"].concat(run.regs).concat(["Renamed"]), run.ins.map(function (it) {
+        return [code(it.text)].concat(run.regs.map(function (r) { return r === it.dst ? "<strong>" + it.name + "</strong>" : ""; })).concat([esc(it.ren)]);
+      }))
+    };
+  }
+
+  G["ilp/renaming"] = variants([renameTable, function (R) {
     var regs = R.shuffle(["$t0", "$t1", "$t2", "$t3", "$t4", "$t5", "$t6"]).slice(0, 4), map = {}, next = 4, fields = [], rows = [], sol = [];
     regs.forEach(function (r, k) { map[r] = "V" + k; });
     var n = R.int(4, 5);
@@ -1678,6 +1802,43 @@
       solution: p("Longest chain: <strong>" + cp + "</strong> instructions. The schedule needs at least max(" + cp + ", ⌈" + n + " ÷ " + W + "⌉) cycles; the best one takes <strong>" + best + "</strong>, so CPI = " + best + "/" + n + " = <strong>" + fmt(best / n) + "</strong>.")
     };
   }
+  function typedCode(R) {
+    var n = R.int(5, 6), ins = [], preds = [], types = [], lines = [], free = ["$t0", "$t1", "$t2", "$t3", "$t4", "$t5"];
+    for (var k = 0; k < n; k++) {
+      var mem = R.chance(0.45), cand = [];
+      for (var q = 0; q < k; q++) if (ins[q].dst && R.chance(0.35)) cand.push(q);
+      cand = cand.slice(-2);
+      var srcs = cand.map(function (q2) { return ins[q2].dst; }), dst = free[k], text;
+      if (mem && srcs.length && R.chance(0.5)) { text = "sw " + srcs[0] + ", " + 4 * R.int(0, 4) + "($s0)"; ins.push({ dst: null }); cand = cand.slice(0, 1); }
+      else if (mem) { text = "lw " + dst + ", " + 4 * R.int(0, 4) + "($s0)"; ins.push({ dst: dst }); cand = []; }
+      else {
+        while (srcs.length < 2) srcs.push(R.pick(["$s1", "$s2"]));
+        text = R.pick(["add", "sub", "or"]) + " " + dst + ", " + srcs[0] + ", " + srcs[1]; ins.push({ dst: dst });
+      }
+      preds.push(cand); types.push(mem ? "mem" : "alu"); lines.push((k + 1) + ": " + text);
+    }
+    return { n: n, preds: preds, types: types, lines: lines };
+  }
+  /* Exam style: fill in the schedule table itself. Any valid schedule with the minimum number of cycles is accepted. */
+  function scheduleTable(R) {
+    var c = typedCode(R), sched = bestSchedule(c.preds, c.types), best = sched.length, parts = [], rows = [];
+    for (var r = 0; r < c.n; r++) {
+      parts.push(r + "_0", r + "_1");
+      rows.push([r + 1, { f: "s", part: r + "_0" }, { f: "s", part: r + "_1" }]);
+    }
+    var answer = [];
+    for (var r2 = 0; r2 < c.n; r2++) { var cy = sched[r2] || [null, null]; answer.push(cy[0] === null ? "" : String(cy[0] + 1), cy[1] === null ? "" : String(cy[1] + 1)); }
+    rows[0].push({ mark: "s" });
+    return {
+      prompt: p("A two-issue processor can start one ALU instruction and one load/store in the same cycle. Each instruction takes 1 cycle, and a dependent instruction can issue the cycle after its producer. Reorder freely as long as dependencies are respected.") + pre(c.lines) +
+        p("Fill in a schedule that uses as few cycles as possible: write instruction numbers in the slots and leave unused slots blank. Then give the CPI."),
+      table: { head: ["Cycle", "ALU / branch", "Load / store", ""], rows: rows },
+      fields: [{ id: "s", label: "schedule", kind: "schedule", parts: parts, answer: answer, n: c.n, preds: c.preds, types: c.types, best: best, size: 3 },
+        num("cpi", "CPI", best / c.n, { tol: 0.005 })],
+      solution: table(["Cycle", "ALU / branch", "Load / store"], sched.map(function (cy, i) { return [i + 1, cy[0] === null ? "" : cy[0] + 1, cy[1] === null ? "" : cy[1] + 1]; })) +
+        p("One best schedule takes <strong>" + best + "</strong> cycles (other orders can tie), so CPI = " + best + "/" + c.n + " = <strong>" + fmt(best / c.n) + "</strong>.")
+    };
+  }
   function vliwTyped(R) {
     var n = R.int(5, 6), ins = [], preds = [], types = [], lines = [], free = ["$t0", "$t1", "$t2", "$t3", "$t4", "$t5"];
     for (var k = 0; k < n; k++) {
@@ -1701,7 +1862,7 @@
       solution: p("ALU instructions: " + types.filter(function (t) { return t === "alu"; }).length + "; loads/stores: " + types.filter(function (t) { return t === "mem"; }).length + ". The best schedule pairs independent ALU and memory instructions and takes <strong>" + best + "</strong> cycles, so CPI = " + best + "/" + n + " = <strong>" + fmt(best / n) + "</strong>.")
     };
   }
-  G["ilp/vliw"] = variants([vliwAny, vliwTyped]);
+  G["ilp/vliw"] = variants([scheduleTable, vliwAny, vliwTyped]);
 
   /* ----- 10. Multicore ----- */
   G["multicore/mesi"] = variants([function (R) {
@@ -1909,6 +2070,33 @@
       return { ok: v === f.answer };
     },
     /* raw: one array of cell strings per line (way). Lines and bytes may be in any order. */
+    /* raw: array of cell strings, one per part, compared cell by cell ("-" counts as blank) */
+    cells: function (f, raw) {
+      var clean = function (x) { x = norm(x); return /^(-|—)$/.test(x) ? "" : x; };
+      return { ok: raw.length === f.answer.length && raw.every(function (x, i) { return clean(x) === norm(f.answer[i]); }) };
+    },
+    /* raw: two cells per cycle (ALU slot, load/store slot); any valid minimum-length schedule passes */
+    schedule: function (f, raw) {
+      var where = {}, last = -1, problem = null;
+      for (var k = 0; k < raw.length; k++) {
+        var x = String(raw[k]).trim();
+        if (x === "" || /^(-|—)$/.test(x)) continue;
+        var v = parseInt(x, 10), row = Math.floor(k / 2), col = k % 2;
+        if (!(v >= 1 && v <= f.n) || String(v) !== x) return { ok: false, note: "Use instruction numbers 1–" + f.n + "." };
+        if (where[v] !== undefined) return { ok: false, note: "Instruction " + v + " appears more than once." };
+        if ((col === 0) !== (f.types[v - 1] === "alu")) problem = problem || "Instruction " + v + " is in the wrong kind of slot.";
+        where[v] = row; last = Math.max(last, row);
+      }
+      for (var i = 1; i <= f.n; i++) if (where[i] === undefined) return { ok: false, note: "Instruction " + i + " is missing." };
+      if (problem) return { ok: false, note: problem };
+      for (var j = 0; j < f.n; j++) {
+        for (var q = 0; q < f.preds[j].length; q++) {
+          if (where[j + 1] <= where[f.preds[j][q] + 1]) return { ok: false, note: "Instruction " + (j + 1) + " issues before instruction " + (f.preds[j][q] + 1) + " has produced its value." };
+        }
+      }
+      if (last + 1 > f.best) return { ok: false, note: "That schedule is valid but takes " + (last + 1) + " cycles; it can be done in " + f.best + "." };
+      return { ok: true };
+    },
     cacheset: function (f, raw) {
       var got = [], bad = false;
       raw.forEach(function (cells) {
@@ -1936,6 +2124,12 @@
     }
   };
   function check(field, raw) {
+    if (field.kind === "cells" || field.kind === "schedule") {
+      raw = raw || [];
+      var allBlank = raw.every(function (x) { return String(x).trim() === ""; });
+      if (allBlank && field.answer.some(function (x) { return x !== ""; })) return { ok: false, blank: true };
+      return CHECKERS[field.kind](field, raw);
+    }
     if (field.kind === "cacheset") {
       var empty = !raw || raw.every(function (cells) { return cells.every(function (x) { return String(x).trim() === ""; }); });
       if (empty && field.answer.length) return { ok: false, blank: true };
@@ -1955,6 +2149,7 @@
       case "bits": return f.answer;
       case "reg": return REGS[f.answer];
       case "bool": return f.example;
+      case "cells": case "schedule": return f.answer.slice();
       case "cacheset":
         var lines = f.answer.map(function (l) { return l.map(String); });
         while (lines.length < f.ways) { var e = []; for (var k = 0; k < f.block; k++) e.push(""); lines.push(e); }

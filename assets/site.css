@@ -757,3 +757,4 @@ body.app .brand { font-size: 1.1rem; }
   0%, 100% { transform: scaleX(1); }
   50% { transform: scaleX(0.18); }
 }
+.answer-form .answer-table td select { width: 100%; min-width: 4.5em; }
