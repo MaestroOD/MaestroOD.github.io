@@ -456,8 +456,13 @@ body.app > header { position: static; flex: none; }
 body.app > main { flex: 1; min-height: 0; min-width: 0; display: flex; }
 body.app > footer { display: none; }
 .practice-app { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; padding: 0; border: 0; }
-.practice-bar { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; padding: 10px 0 8px; flex: none; }
-.practice-bar .breadcrumb, .practice-bar .practice-hint { margin: 0; }
+.practice-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; padding: 6px 0; flex: none; }
+.practice-bar .breadcrumb { margin: 0; font-size: 0.85rem; }
+
+/* App pages get a slimmer header (the chao toggle keeps its fixed 40x40 box) */
+body.app header nav { min-height: 52px; }
+body.app header { border-bottom-width: 2px; }
+body.app .brand { font-size: 1.1rem; }
 .practice-app .container { width: min(1240px, calc(100% - 32px)); }
 .menu-toggle { display: none; }
 
@@ -465,7 +470,7 @@ body.app > footer { display: none; }
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 270px minmax(0, 1fr);
+  grid-template-columns: 300px minmax(0, 1fr);
   gap: 20px;
   padding-bottom: 14px;
 }
@@ -475,7 +480,7 @@ body.app > footer { display: none; }
   padding: 6px 6px 6px 0;
   border-right: 1px solid var(--line);
   font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
-  font-size: 0.84rem;
+  font-size: 0.95rem;
   line-height: 1.45;
 }
 .practice-menu ol, .practice-menu ul { list-style: none; margin: 0; padding: 0; }
@@ -496,12 +501,61 @@ body.app > footer { display: none; }
   margin-top: 0;
   min-height: 0;
   overflow-y: auto;
+  padding: 16px 22px;
   padding: 24px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--paper);
 }
-.problem-panel h2 { margin-bottom: 14px; font-size: 1.45rem; }
+.problem-panel h2 { margin-bottom: 10px; font-size: 1.45rem; }
+.problem-panel h2::after { display: none; }
+.problem-panel { font-size: 1.08rem; }
+.problem-panel code, .problem-panel .problem-code, .problem-panel .problem-table { font-size: 1.02rem; }
+.problem-panel code { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace; color: var(--ink); }
+
+/* Work on the left, solution on the right once it is shown (stacks on narrow screens) */
+.problem-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 28px; align-items: start; }
+@media (min-width: 1100px) {
+  .problem-grid.has-solution { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }
+  .problem-grid.has-solution .solution { margin-top: 0; padding-left: 24px; border-left: 1px solid var(--line); }
+}
+
+/* A table of answers and the remaining answer boxes sit side by side when there is room */
+.answer-area { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0 36px; }
+.answer-area > .table-wrap { flex: 0 1 auto; }
+.answer-area > .code-blanks { flex: 1 1 100%; }
+.answer-area > .answer-grid { flex: 1 1 260px; }
+.answer-area > .table-wrap + .answer-grid { margin-top: 4px; }
+
+/* Answer boxes share one grid so they line up in a single column */
+.answer-grid { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 10px 16px; align-items: center; margin: 12px 0 4px; }
+.answer-grid > label { font-weight: 700; color: var(--ink); }
+.answer-grid > label.is-wide { grid-column: 1 / -1; font-weight: 600; margin-top: 4px; }
+.answer-grid > .answer-slot.is-wide { grid-column: 1 / -1; margin-top: -6px; }
+.answer-slot select { max-width: 100%; }
+
+/* Streak rank pop-up */
+.rank-pop {
+  position: fixed;
+  z-index: 50;
+  pointer-events: none;
+  transform: translate(-50%, -100%);
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.55)) drop-shadow(0 0 6px rgba(0, 0, 0, 0.25));
+  animation: rank-pop 1.4s cubic-bezier(.2, .8, .3, 1) forwards;
+  image-rendering: pixelated;
+}
+.rank-pop.is-max { height: 56px; width: auto; }
+@keyframes rank-pop {
+  0%   { opacity: 0; transform: translate(-50%, -100%) scale(0.3); }
+  14%  { opacity: 1; transform: translate(-50%, -110%) scale(1.15); }
+  26%  { transform: translate(-50%, -110%) scale(1); }
+  75%  { opacity: 1; transform: translate(-50%, -150%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -190%) scale(0.95); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rank-pop { animation: rank-fade 1.2s ease forwards; }
+  @keyframes rank-fade { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+}
 .problem-panel .breadcrumb { margin-bottom: 6px; }
 .problem-prompt { color: var(--body-text); }
 .problem-prompt p { margin: 0 0 12px; }
@@ -546,14 +600,14 @@ body.app > footer { display: none; }
 .work { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 
 .table-wrap { max-width: 100%; overflow-x: auto; }
-.answer-table { font-size: 0.92rem; }
-.answer-table th, .answer-table td { padding: 5px 8px; vertical-align: middle; }
+.answer-table { font-size: 1.02rem; }
+.answer-table th, .answer-table td { padding: 3px 8px; vertical-align: middle; }
 .answer-table td:first-child { white-space: nowrap; }
-.answer-form .answer-table input, .answer-form .answer-table select, .answer-form .code-blanks input, .answer-form .code-blanks select { padding: 3px 5px; }
+.answer-form .answer-table input, .answer-form .answer-table select, .answer-form .code-blanks input, .answer-form .code-blanks select { padding: 2px 5px; }
 .answer-table .mark, .code-blanks .mark { width: 1.1ch; }
 .answer-cell { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .answer-form select, .answer-form input {
-  padding: 8px 10px;
+  padding: 5px 9px;
   border: 2px solid var(--grey);
   border-radius: 7px;
   background: var(--paper);
@@ -592,8 +646,7 @@ body.app > footer { display: none; }
 
 @media (max-width: 900px) {
   .practice-layout { grid-template-columns: 220px minmax(0, 1fr); gap: 14px; }
-  .practice-menu { font-size: 0.8rem; }
-  .practice-hint { display: none; }
+  .practice-menu { font-size: 0.88rem; }
 }
 
 /* Phones: one column; the menu becomes a drop-down under the ☰ button */

@@ -118,8 +118,9 @@
 
     var byId = {}, placed = {};
     gen.fields.forEach(function (f) { byId[f.id] = f; });
-    var html = "<div class=\"problem-prompt\">" + gen.prompt + "</div><form class=\"answer-form\" id=\"answer-form\" novalidate>";
+    var html = "<div class=\"problem-grid\" id=\"problem-grid\"><div class=\"problem-work\"><div class=\"problem-prompt\">" + gen.prompt + "</div><form class=\"answer-form\" id=\"answer-form\" novalidate>";
 
+    html += "<div class=\"answer-area\">";
     if (gen.table) {
       html += "<div class=\"table-wrap\"><table class=\"problem-table answer-table\"><thead><tr>" +
         gen.table.head.map(function (h) { return "<th>" + h + "</th>"; }).join("") + "</tr></thead><tbody>" +
@@ -138,16 +139,20 @@
         }).join("") + "</div>";
       }).join("") + "</div>";
     }
-    gen.fields.forEach(function (f) {
-      if (placed[f.id]) return;
-      html += "<div class=\"answer-row" + (f.wide ? " is-wide" : "") + "\"><label for=\"ans-" + f.id + "\">" + esc(f.label) + "</label>" + inputHtml(f, false) + "</div>";
-    });
-    html += "<div class=\"actions\">" +
+    var loose = gen.fields.filter(function (f) { return !placed[f.id]; });
+    if (loose.length) {
+      /* one shared grid, so every answer box lines up in the same column */
+      html += "<div class=\"answer-grid\">" + loose.map(function (f) {
+        return "<label class=\"" + (f.wide ? "is-wide" : "") + "\" for=\"ans-" + f.id + "\">" + esc(f.label) + "</label>" +
+          "<div class=\"answer-slot" + (f.wide ? " is-wide" : "") + "\">" + inputHtml(f, false) + "</div>";
+      }).join("") + "</div>";
+    }
+    html += "</div><div class=\"actions\">" +
       "<button class=\"button primary\" type=\"submit\">Check answer</button>" +
       "<button class=\"button\" type=\"button\" id=\"new-problem\">New problem</button>" +
       "<button class=\"button\" type=\"button\" id=\"show-solution\">Show solution</button>" +
-      "</div></form><div class=\"feedback\" id=\"feedback\" role=\"status\" aria-live=\"polite\"></div>" +
-      "<div class=\"solution\" id=\"solution\" hidden></div>";
+      "</div></form><div class=\"feedback\" id=\"feedback\" role=\"status\" aria-live=\"polite\"></div></div>" +
+      "<aside class=\"solution\" id=\"solution\" hidden></aside></div>";
     body.innerHTML = html;
 
     // restore typed answers
@@ -162,6 +167,9 @@
     form.addEventListener("submit", function (e) { e.preventDefault(); check(false); });
     form.addEventListener("input", onEdit);
     form.addEventListener("change", onEdit);
+    form.addEventListener("pointerdown", function (e) {
+      if (e.target.closest("button[type=submit]")) lastPointer = { x: e.clientX, y: e.clientY, t: Date.now() };
+    });
     document.getElementById("new-problem").addEventListener("click", function () {
       store.items[key] = { seed: newSeed(), values: {}, checked: false, shown: false };
       save();
@@ -209,16 +217,23 @@
     state.item.checked = true;
     save();
     if (right === n) {
+      if (!quiet && !state.item.scored) {
+        state.item.scored = true;
+        store.streak = (store.streak || 0) + 1;
+        save();
+        popRank(store.streak);
+      }
       fb.className = "feedback is-right";
-      fb.innerHTML = "<strong>Correct!</strong> Try a new problem, or read the worked solution below.";
+      fb.innerHTML = "<strong>Correct!</strong>";
       if (!quiet) { state.item.shown = true; save(); }
       reveal();
       if (!quiet) fb.scrollIntoView({ block: "nearest", behavior: "smooth" });
       return;
     }
+    if (!quiet && !blank && !state.item.scored) { store.streak = 0; save(); }
     fb.className = "feedback is-wrong";
-    var msg = "<strong>Not quite.</strong> " + (n > 1 ? right + " of " + n + " answers are correct. " : "") +
-      (blank ? "Fill in every answer, then check again." : "Have another go, or use “Show solution” to see the working.");
+    var msg = "<strong>Not quite.</strong> " + (n > 1 ? right + " of " + n + " correct." : "") +
+      (blank ? " Fill in every answer." : "");
     if (notes.length) msg += "<ul>" + notes.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + "</ul>";
     fb.innerHTML = msg;
     if (!quiet) fb.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -228,6 +243,30 @@
     var sol = document.getElementById("solution");
     sol.innerHTML = "<h4>Solution</h4>" + state.gen.solution;
     sol.hidden = false;
+    /* wide answer tables need the full width, so their solution goes underneath instead */
+    if (!(state.gen.table && state.gen.table.head.length >= 5)) document.getElementById("problem-grid").classList.add("has-solution");
+  }
+
+  /* ---------- streak ranks: each right answer in a row pops the next rank ---------- */
+  var RANKS = ["0-good", "1-nice", "2-jammin", "3-radical", "4-tight", "5-awesome", "6-extreme", "7-perfect"];
+  var RANK_WORDS = ["Good!", "Nice!", "Jammin'!", "Radical!", "Tight!", "Awesome!", "Extreme!", "Perfect!"];
+  RANKS.forEach(function (r) { var img = new Image(); img.src = "../../../images/ranks/" + r + ".png"; });
+  var lastPointer = null;
+  function popRank(streak) {
+    var k = Math.min(streak, RANKS.length) - 1, x, y;
+    if (lastPointer && Date.now() - lastPointer.t < 1500) { x = lastPointer.x; y = lastPointer.y; }
+    else {
+      var btn = document.querySelector("#answer-form button[type=submit]").getBoundingClientRect();
+      x = btn.left + btn.width / 2; y = btn.top;
+    }
+    var img = document.createElement("img");
+    img.className = "rank-pop" + (k === RANKS.length - 1 ? " is-max" : "");
+    img.src = "../../../images/ranks/" + RANKS[k] + ".png";
+    img.alt = RANK_WORDS[k];
+    img.style.left = Math.max(120, Math.min(window.innerWidth - 120, x)) + "px";
+    img.style.top = Math.max(70, y - 12) + "px";
+    document.body.appendChild(img);
+    img.addEventListener("animationend", function () { img.remove(); });
   }
 
   /* ---------- start ---------- */

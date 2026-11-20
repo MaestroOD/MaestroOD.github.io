@@ -71,6 +71,8 @@
   function hex(n, w) { var s = (n >>> 0).toString(16).toUpperCase(); while (s.length < w) s = "0" + s; return "0x" + s; }
   function p(s) { return "<p>" + s + "</p>"; }
   function ul(items) { return "<ul>" + items.map(function (i) { return "<li>" + i + "</li>"; }).join("") + "</ul>"; }
+  /* "a 6-bit" but "an 8-bit", "an 11-bit", "an 18-bit" */
+  function aN(n) { return /^(8|11|18)/.test(String(n)) ? "an " + n : "a " + n; }
   function sum(a) { return a.reduce(function (s, x) { return s + x; }, 0); }
   function maxOf(a) { return Math.max.apply(null, a); }
   function percentSplit(R, k, step) {
@@ -978,7 +980,7 @@
     function (R) {
       var w = R.pick([6, 8]), lim = 1 << (w - 1), v = R.until(function () { return R.int(-lim, lim - 1); }, function (x) { return x !== 0; }), b = bin(v & ((1 << w) - 1), w);
       return {
-        prompt: p("Write " + v + " as a " + w + "-bit two's complement number."),
+        prompt: p("Write " + v + " as " + aN(w) + "-bit two's complement number."),
         fields: [{ id: "b", label: "Binary", kind: "bits", width: w, answer: b, size: 12 }],
         solution: v >= 0 ? p(v + " = <strong>" + b + "</strong>") : p(-v + " = " + bin(-v, w) + "; invert: " + bin(~(-v) & ((1 << w) - 1), w) + "; add 1: <strong>" + b + "</strong>")
       };
@@ -1001,13 +1003,13 @@
     },
     function (R) {
       var n = R.int(4, 16), lo = -Math.pow(2, n - 1), hi = Math.pow(2, n - 1) - 1;
-      return { prompt: p("What range of values can an " + n + "-bit two's complement number hold?"), fields: [num("lo", "Smallest", lo), num("hi", "Largest", hi)], solution: p("−2^" + (n - 1) + " to 2^" + (n - 1) + " − 1: <strong>" + lo + "</strong> to <strong>" + hi + "</strong>") };
+      return { prompt: p("What range of values can " + aN(n) + "-bit two's complement number hold?"), fields: [num("lo", "Smallest", lo), num("hi", "Largest", hi)], solution: p("−2^" + (n - 1) + " to 2^" + (n - 1) + " − 1: <strong>" + lo + "</strong> to <strong>" + hi + "</strong>") };
     },
     function (R) {
       var w = R.pick([6, 8]), v = -R.int(1, (1 << (w - 1)) - 1), kind = R.pick(["one's complement", "sign-magnitude"]), mask = (1 << w) - 1;
       var b = kind === "one's complement" ? bin(~(-v) & mask, w) : "1" + bin(-v, w - 1);
       return {
-        prompt: p("Write " + v + " as a " + w + "-bit <strong>" + kind + "</strong> number."),
+        prompt: p("Write " + v + " as " + aN(w) + "-bit <strong>" + kind + "</strong> number."),
         fields: [{ id: "b", label: "Binary", kind: "bits", width: w, answer: b, size: 12 }],
         solution: p(kind === "one's complement" ? "Write " + -v + " = " + bin(-v, w) + " and invert every bit: <strong>" + b + "</strong> (no +1, unlike two's complement)."
           : "Sign bit 1, then " + -v + " in the remaining " + (w - 1) + " bits: <strong>" + b + "</strong>")
