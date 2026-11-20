@@ -449,43 +449,46 @@ h2 + h3.group { margin-top: 0; }
   font-size: 0.95rem;
 }
 
-/* Practice page: radio-button chips (same size selected or not, so nothing shifts) */
-.chooser { margin: 28px 0 0; padding: 0; border: 0; min-width: 0; }
-.chooser legend {
-  margin-bottom: 10px;
-  padding: 0;
-  color: var(--muted);
-  font-size: 0.85rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+/* Practice page: plain nested text menu on the left, problem on the right */
+.practice-layout {
+  display: grid;
+  grid-template-columns: 290px minmax(0, 1fr);
+  gap: 40px;
+  align-items: start;
+  margin-top: 32px;
 }
-.chooser-note { margin: 10px 0 0; }
-.chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.chip { position: relative; display: inline-flex; cursor: pointer; }
-.chip input { position: absolute; opacity: 0; width: 1px; height: 1px; }
-.chip span {
-  display: inline-block;
-  padding: 7px 14px;
-  border: 1px solid var(--grey);
-  border-radius: 999px;
-  color: var(--body-text);
-  font-size: 0.9rem;
-  font-weight: 600;
-  line-height: 1.3;
+.practice-menu {
+  position: sticky;
+  top: 92px;
+  max-height: calc(100vh - 110px);
+  overflow-y: auto;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 0.86rem;
+  line-height: 1.5;
 }
-.chip:hover span { border-color: var(--accent); }
-.chip input:checked + span { background: var(--brand); border-color: var(--brand); color: var(--white); }
-.chip input:focus-visible + span { outline: 2px solid var(--sky); outline-offset: 2px; }
+.practice-menu ol, .practice-menu ul { list-style: none; margin: 0; padding: 0; }
+.practice-menu a { display: block; color: var(--body-text); text-decoration: none; padding: 2px 6px; border-radius: 3px; }
+.practice-menu a:hover { color: var(--ink); text-decoration: underline; text-decoration-color: var(--link-hover); }
+.practice-menu a:focus-visible { outline: 2px solid var(--sky); outline-offset: 1px; }
+.menu-num { color: var(--muted); }
+.menu-topic-item.is-open > .menu-topic { color: var(--ink); font-weight: 700; }
+.menu-topic-item ul { margin: 2px 0 8px; }
+.menu-topic-item li { display: flex; }
+.menu-topic-item li::before { content: "├─"; flex: none; padding: 2px 0 0 3.2ch; color: var(--muted); }
+.menu-topic-item li:last-child::before { content: "└─"; }
+.menu-problem { flex: 1; }
+.menu-problem[aria-current] { background: var(--brand); color: var(--white); }
+.menu-problem[aria-current]:hover { color: var(--white); }
 
 .problem-panel {
-  margin-top: 36px;
+  margin-top: 0;
   padding: 24px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--paper);
 }
 .problem-panel h2 { margin-bottom: 20px; font-size: 1.6rem; }
+.problem-panel .breadcrumb { margin-bottom: 6px; }
 .problem-prompt { color: var(--body-text); }
 .problem-prompt p { margin: 0 0 12px; }
 
@@ -528,6 +531,52 @@ h2 + h3.group { margin-top: 0; }
 .solution p { margin: 0 0 8px; }
 .work { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 
+.table-wrap { max-width: 100%; overflow-x: auto; }
+.answer-table { font-size: 0.92rem; }
+.answer-table th, .answer-table td { padding: 5px 8px; vertical-align: middle; }
+.answer-table td:first-child { white-space: nowrap; }
+.answer-form .answer-table input, .answer-form .answer-table select, .answer-form .code-blanks input, .answer-form .code-blanks select { padding: 3px 5px; }
+.answer-table .mark, .code-blanks .mark { width: 1.1ch; }
+.answer-cell { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.answer-form select, .answer-form input {
+  padding: 8px 10px;
+  border: 2px solid var(--grey);
+  border-radius: 7px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.answer-form select:focus-visible, .answer-form input:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
+.answer-form .is-right { border-color: var(--spring); }
+.answer-form .is-wrong { border-color: var(--tiger); }
+.problem-code {
+  margin: 4px 0 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--wash);
+  color: var(--ink);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  overflow-x: auto;
+  white-space: pre;
+}
+.code-line { min-height: 1.6em; display: flex; align-items: center; flex-wrap: nowrap; white-space: pre; }
+.code-blanks .answer-cell { margin: 2px 0; }
+.code-blanks select, .code-blanks input { font-family: inherit; font-size: inherit; }
+.expr { font-family: Georgia, "Times New Roman", serif; font-size: 1.15rem; color: var(--ink); }
+.fsm { display: block; width: 100%; max-width: 380px; height: auto; margin: 4px 0 12px; color: var(--ink); }
+.feedback ul { margin: 6px 0 0; padding-left: 20px; }
+.solution ul { margin: 0 0 8px; padding-left: 20px; }
+.solution .problem-table { margin-top: 0; }
+
+@media (max-width: 980px) {
+  .practice-layout { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .practice-menu { position: static; max-height: none; }
+}
+
 @media (max-width: 760px) {
   .topic-menu { grid-template-columns: 1fr; }
   .topic-item { grid-template-columns: 36px 1fr; }
@@ -536,20 +585,5 @@ h2 + h3.group { margin-top: 0; }
   .problem-table th, .problem-table td { padding: 6px 10px; }
 }
 
-/* Phones: a dropdown for the 11 topics instead of a tall stack of chips */
-.topic-select {
-  display: none;
-  width: 100%;
-  padding: 10px 12px;
-  border: 2px solid var(--grey);
-  border-radius: 7px;
-  background: var(--paper);
-  color: var(--ink);
-  font: inherit;
-  font-weight: 600;
-}
-.topic-select:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
-@media (max-width: 760px) {
-  .chips-wide { display: none; }
-  .topic-select { display: block; }
-}
+/* FSM diagrams: a halo in the panel colour keeps labels readable where arrows cross */
+.fsm-label { paint-order: stroke; stroke: var(--paper); stroke-width: 4px; stroke-linejoin: round; }

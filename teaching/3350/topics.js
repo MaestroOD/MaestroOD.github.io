@@ -1,6 +1,5 @@
 /* CS 3350A topic data, shared by the course page, the topic pages and the practice page.
-   Each topic lists its problem types; `ready: true` means the practice page has a working
-   generator for it (see practice.js). Everything else shows a "coming soon" placeholder. */
+   Each problem type here needs a matching generator in generators.js ("slug/id"). */
 window.CS3350 = {
   topics: [
     {
@@ -21,7 +20,7 @@ window.CS3350 = {
         "Amdahl's law: speedup = 1 ÷ ((1 − f) + f ÷ s), where a fraction f of the time is sped up by a factor s"
       ],
       problems: [
-        { id: "effective-cpi", title: "Effective CPI", ready: true },
+        { id: "effective-cpi", title: "Effective CPI" },
         { id: "cpu-time", title: "CPU time" },
         { id: "amdahl", title: "Amdahl's law" },
         { id: "compare", title: "Comparing processors" }

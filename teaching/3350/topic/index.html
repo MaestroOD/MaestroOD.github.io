@@ -109,11 +109,7 @@
         var a = document.createElement("a");
         a.href = "../practice/?t=" + t.slug + "&p=" + p.id;
         a.textContent = p.title;
-        var tag = document.createElement("span");
-        tag.className = p.ready ? "status ready" : "status soon";
-        tag.textContent = p.ready ? "Available" : "Coming soon";
         li.appendChild(a);
-        li.appendChild(tag);
         list.appendChild(li);
       });
 
