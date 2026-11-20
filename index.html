@@ -8,6 +8,17 @@
   <link rel="icon" href="favicon.ico" sizes="any">
   <link rel="icon" type="image/png" sizes="32x32" href="images/favicon-32.png">
   <link rel="apple-touch-icon" href="images/apple-touch-icon.png">
+  <script>
+    /* Pick the theme before first paint: saved choice, else the OS preference. */
+    (function () {
+      var t = null;
+      try { t = localStorage.getItem("theme"); } catch (e) {}
+      if (t !== "light" && t !== "dark") {
+        t = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+      }
+      document.documentElement.setAttribute("data-theme", t);
+    })();
+  </script>
   <style>
     :root {
       color-scheme: dark;
@@ -30,6 +41,19 @@
       --line: var(--western-purple);           /* dividers, card borders */
       --brand: var(--western-purple);          /* header bar, primary button, tags */
       --accent: var(--orchid);                 /* decoration only: underlines, rules (3.7:1 on Deep Focus, too low for small text) */
+      --link-hover: var(--sky);                /* underline colour on hover */
+    }
+
+    /* Light mode: white page, Deep Focus text, same purple header */
+    :root[data-theme="light"] {
+      color-scheme: light;
+      --paper: var(--white);
+      --wash: #f1eef5;                         /* Western Purple at 8% over white */
+      --ink: var(--deep-focus);                /* 17.3:1 on white */
+      --body-text: rgba(32, 20, 54, 0.85);     /* 11.1:1 */
+      --muted: rgba(32, 20, 54, 0.72);         /* 6.9:1 */
+      --line: #dcd4e6;                         /* Western Purple at 20% over white */
+      --link-hover: var(--western-purple);
     }
 
     * { box-sizing: border-box; }
@@ -51,7 +75,7 @@
       text-decoration-thickness: 2px;
       text-underline-offset: 3px;
     }
-    a:hover { text-decoration-color: var(--sky); }
+    a:hover { text-decoration-color: var(--link-hover); }
 
     .container {
       width: min(1008px, calc(100% - 40px)); /* one width for every section: 240px portrait + 48px gap + 720px text */
@@ -78,7 +102,7 @@
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      color: var(--ink);
+      color: var(--white);
       text-decoration: none;
       font-family: Georgia, "Times New Roman", serif;
       font-size: 1.25rem;
@@ -87,15 +111,32 @@
 
     .chao { height: 40px; width: auto; flex: none; filter: drop-shadow(0 0 2px rgba(236, 232, 243, 0.45)); }
 
+    /* Theme toggle: dark chao in light mode (switches to dark), hero chao in dark mode (switches to light) */
+    .theme-toggle {
+      display: inline-flex;
+      padding: 0;
+      border: 0;
+      background: none;
+      cursor: pointer;
+      line-height: 0;
+    }
+    .theme-toggle:hover .chao { transform: translateY(-1px) scale(1.06); }
+    .theme-toggle:focus-visible { outline: 2px solid var(--sky); outline-offset: 3px; border-radius: 6px; }
+    .theme-toggle .chao-hero { display: none; }
+    [data-theme="dark"] .theme-toggle .chao-dark { display: none; }
+    [data-theme="dark"] .theme-toggle .chao-hero { display: block; }
+
     .nav-links {
       display: flex;
       flex-wrap: wrap;
+      align-items: center;
       gap: 18px;
       font-size: 0.92rem;
     }
 
-    .nav-links a { color: var(--body-text); text-decoration: none; }
-    .nav-links a:hover { color: var(--ink); text-decoration: underline; text-decoration-color: var(--sky); }
+    /* The header stays Western Purple in both themes, so its text is always white */
+    .nav-links a { color: rgba(255, 255, 255, 0.85); text-decoration: none; }
+    .nav-links a:hover { color: var(--white); text-decoration: underline; text-decoration-color: var(--sky); }
 
     #about { background: linear-gradient(180deg, var(--wash), var(--paper)); }
 
@@ -337,10 +378,12 @@
 <body>
   <header>
     <nav class="container" aria-label="Primary navigation">
-      <a class="brand" href="#top">Adam Murdock Gale
-        <img class="chao" src="images/dark-chao.png" alt="Dark chao" width="38" height="40">
-      </a>
+      <a class="brand" href="#top">Adam Murdock Gale</a>
       <div class="nav-links">
+        <button class="theme-toggle" type="button" aria-label="Switch to dark mode" title="Switch to dark mode">
+          <img class="chao chao-dark" src="images/dark-chao.png" alt="" width="37" height="40">
+          <img class="chao chao-hero" src="images/hero-chao.png" alt="" width="23" height="40">
+        </button>
         <a href="#about">About</a>
         <a href="#education">Education</a>
         <a href="#publications">Publications</a>
@@ -707,6 +750,23 @@
 
   <script>
     document.getElementById("year").textContent = new Date().getFullYear();
+
+    (function () {
+      var root = document.documentElement;
+      var btn = document.querySelector(".theme-toggle");
+      function label() {
+        var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+        btn.setAttribute("aria-label", "Switch to " + next + " mode");
+        btn.title = "Switch to " + next + " mode";
+      }
+      label();
+      btn.addEventListener("click", function () {
+        var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+        root.setAttribute("data-theme", next);
+        try { localStorage.setItem("theme", next); } catch (e) {}
+        label();
+      });
+    })();
   </script>
 </body>
 </html>
