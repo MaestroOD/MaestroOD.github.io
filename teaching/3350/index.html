@@ -96,9 +96,6 @@
       CS3350.topics.forEach(function (t, i) {
         var li = document.createElement("li");
         li.className = "topic-item";
-        var num = document.createElement("span");
-        num.className = "topic-num";
-        num.textContent = String(i + 1).padStart(2, "0");
         var body = document.createElement("div");
         var h3 = document.createElement("h3");
         var a = document.createElement("a");
@@ -112,7 +109,6 @@
         meta.textContent = t.lectures;
         body.appendChild(h3);
         body.appendChild(p);
-        li.appendChild(num);
         li.appendChild(body);
         li.appendChild(meta);
         menu.appendChild(li);

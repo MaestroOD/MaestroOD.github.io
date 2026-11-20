@@ -409,13 +409,12 @@ h2 + h3.group { margin-top: 0; }
 }
 .topic-item {
   display: grid;
-  grid-template-columns: 44px 1fr auto;
+  grid-template-columns: 1fr auto;
   gap: 12px;
   align-items: baseline;
   padding: 16px 0;
   border-top: 1px solid var(--line);
 }
-.topic-num { color: var(--muted); font-weight: 800; font-variant-numeric: tabular-nums; }
 .topic-item h3 { margin: 0 0 2px; font-size: 1.15rem; }
 .topic-item p { margin: 0; color: var(--muted); font-size: 0.95rem; }
 .topic-lectures { color: var(--muted); font-size: 0.85rem; white-space: nowrap; }
@@ -487,7 +486,6 @@ body.app .brand { font-size: 1.1rem; }
 .practice-menu a { display: block; color: var(--body-text); text-decoration: none; padding: 2px 6px; border-radius: 3px; }
 .practice-menu a:hover { color: var(--ink); text-decoration: underline; text-decoration-color: var(--link-hover); }
 .practice-menu a:focus-visible { outline: 2px solid var(--sky); outline-offset: 1px; }
-.menu-num { color: var(--muted); }
 .menu-topic-item.is-open > .menu-topic { color: var(--ink); font-weight: 700; }
 .menu-topic-item ul { margin: 1px 0 6px; }
 .menu-topic-item li { display: flex; }
@@ -688,8 +686,7 @@ body.app .brand { font-size: 1.1rem; }
 
 @media (max-width: 760px) {
   .topic-menu { grid-template-columns: 1fr; }
-  .topic-item { grid-template-columns: 36px 1fr; }
-  .topic-lectures { grid-column: 2; }
+  .topic-item { grid-template-columns: 1fr auto; }
   .problem-panel { padding: 16px; }
   .problem-table th, .problem-table td { padding: 6px 10px; }
 }
@@ -743,3 +740,20 @@ body.app .brand { font-size: 1.1rem; }
 .problem-prompt .problem-table { display: block; max-width: 100%; overflow-x: auto; }
 
 .course-links { margin: 14px 0 0; font-size: 1.05rem; color: var(--muted); }
+
+/* Wrong-answer ring burst (drawn in CSS) */
+.ring-layer { position: fixed; inset: 0; z-index: 60; pointer-events: none; overflow: hidden; }
+.ring { position: absolute; left: 0; top: 0; width: 22px; height: 22px; will-change: transform; }
+.ring-spin {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 4px solid #f6c21a;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px #9a6a00, inset 0 0 0 1px #9a6a00, inset 2px 2px 0 1px #fff3b0;
+  animation: ring-spin 0.45s linear infinite;
+}
+@keyframes ring-spin {
+  0%, 100% { transform: scaleX(1); }
+  50% { transform: scaleX(0.18); }
+}

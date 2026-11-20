@@ -55,7 +55,7 @@
       html += "<li class=\"menu-topic-item" + (active ? " is-open" : "") + "\">" +
         "<a class=\"menu-topic\" href=\"?t=" + t.slug + "&amp;p=" + target + "\" data-t=\"" + t.slug + "\" data-p=\"" + target + "\"" +
         (active ? " aria-expanded=\"true\"" : " aria-expanded=\"false\"") + ">" +
-        "<span class=\"menu-num\">" + String(i + 1).padStart(2, "0") + "</span> " + esc(t.title) + "</a>";
+        esc(t.title) + "</a>";
       if (active) {
         html += "<ul>";
         t.problems.forEach(function (p) {
@@ -257,6 +257,7 @@
       return;
     }
     if (!quiet && !blank && !state.item.scored) { store.streak = 0; save(); }
+    if (!quiet && right + blank < n) spillRings();
     fb.className = "feedback is-wrong";
     var msg = "<strong>not quite.</strong> " + (n > 1 ? right + " of " + n + " correct." : "") +
       (blank ? " fill in every answer." : "");
@@ -309,6 +310,41 @@
   document.addEventListener("pointerdown", function (e) {
     if (cheatPinned && !cheatPop.contains(e.target) && e.target !== cheatBtn) hideCheat(true);
   });
+
+  /* ---------- wrong answer: a burst of gold rings scatters, bounces and blinks out ---------- */
+  function spillRings() {
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    var x0, y0;
+    if (lastPointer && Date.now() - lastPointer.t < 1500) { x0 = lastPointer.x; y0 = lastPointer.y; }
+    else { var r = document.querySelector("#answer-form button[type=submit]").getBoundingClientRect(); x0 = r.left + r.width / 2; y0 = r.top + r.height / 2; }
+    var layer = document.createElement("div"), rings = [], n = 16, floor = Math.min(window.innerHeight - 16, y0 + 150);
+    layer.className = "ring-layer";
+    document.body.appendChild(layer);
+    for (var i = 0; i < n; i++) {
+      var el = document.createElement("span"), spin = document.createElement("span");
+      el.className = "ring"; spin.className = "ring-spin";
+      spin.style.animationDelay = (-Math.random() * 0.5) + "s";
+      el.appendChild(spin); layer.appendChild(el);
+      /* fan out over the upper half-circle, a little random */
+      var a = Math.PI + (i + 0.5) / n * Math.PI + (Math.random() - 0.5) * 0.25, speed = 280 + Math.random() * 260;
+      rings.push({ el: el, x: x0, y: y0, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed - 120 });
+    }
+    var start = null, last = null, life = 1700;
+    function frame(ts) {
+      if (start === null) { start = ts; last = ts; }
+      var dt = Math.min(0.05, (ts - last) / 1000), age = ts - start;
+      last = ts;
+      rings.forEach(function (g) {
+        g.vy += 1500 * dt;
+        g.x += g.vx * dt; g.y += g.vy * dt;
+        if (g.y > floor && g.vy > 0) { g.y = floor; g.vy *= -0.55; g.vx *= 0.8; }
+        g.el.style.transform = "translate(" + (g.x - 11) + "px," + (g.y - 11) + "px)";
+        g.el.style.opacity = age > life - 650 ? (Math.floor(age / 55) % 2 ? 0 : 1) : 1;
+      });
+      if (age < life) requestAnimationFrame(frame); else layer.remove();
+    }
+    requestAnimationFrame(frame);
+  }
 
   /* ---------- streak ranks: each right answer in a row pops the next rank ---------- */
   var RANKS = ["0-good", "1-nice", "2-jammin", "3-radical", "4-tight", "5-awesome", "6-extreme", "7-perfect"];
