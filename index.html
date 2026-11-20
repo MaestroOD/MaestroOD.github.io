@@ -54,7 +54,7 @@
     a:hover { text-decoration-color: var(--sky); }
 
     .container {
-      width: min(1120px, calc(100% - 40px));
+      width: min(1008px, calc(100% - 40px)); /* one width for every section: 240px portrait + 48px gap + 720px text */
       margin: 0 auto;
     }
 
@@ -217,12 +217,7 @@
     .links { font-size: 0.92rem; }
     .links a { font-weight: 600; }
 
-    .personal { flex: 1; max-width: 720px; color: var(--muted); margin: 0; }
-
-    /* Narrower, centred containers for the capped sections:
-       hero = 240px portrait + 48px gap + 720px text; irl = 720px text + 32px gap + 160px photo */
-    .container.hero { width: min(1008px, calc(100% - 40px)); }
-    #irl .container { width: min(912px, calc(100% - 40px)); }
+    .personal { flex: 1; color: var(--muted); margin: 0; }
 
     .irl { display: flex; align-items: flex-start; gap: 32px; }
 
