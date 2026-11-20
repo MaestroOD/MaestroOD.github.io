@@ -217,7 +217,18 @@
     .links { font-size: 0.92rem; }
     .links a { font-weight: 600; }
 
-    .personal { color: var(--muted); max-width: 720px; }
+    .personal { color: var(--muted); max-width: 720px; margin: 0; }
+
+    .irl { display: flex; align-items: flex-start; gap: 32px; }
+
+    .cat {
+      display: block;
+      flex: none;
+      width: 160px;
+      height: auto;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+    }
 
     .grid {
       display: grid;
@@ -315,6 +326,8 @@
       section { padding: 52px 0; }
       .hero { grid-template-columns: 1fr; gap: 28px; }
       .portrait-figure, .portrait { width: 180px; }
+      .irl { flex-direction: column; gap: 20px; }
+      .cat { width: 140px; }
       .grid { grid-template-columns: 1fr; }
       .publication, .news-item { grid-template-columns: 1fr; gap: 4px; }
       footer .container { flex-direction: column; }
@@ -592,7 +605,10 @@
     <section id="irl">
       <div class="container">
         <h2>irl</h2>
+        <div class="irl">
         <p class="personal">Married to my wonderfully supportive partner that has somehow tolerated my last-minute bugfixing allnighters for nearly the last decade. i love co-operative board games like <a href="https://store.steampowered.com/app/1236720/">Spirit Island</a>, <a href="https://store.steampowered.com/app/780290/">Gloomhaven</a>, Pandemic, Hanabi, <a href="https://store.steampowered.com/app/337150/">Sentinels of the Multiverse</a>, <a href="https://store.steampowered.com/app/654220/">Flash Point</a>... i could go on. (i beg you, PLEASE <a href="mailto:agale9+website@uwo.ca">hit me up</a> if you want to play spirit island. i'm addicted. i'm currently working on beating all the adversaries at level 6! I LOVE THE THEME OF OCEAN'S HUNGRY GRASP). i spend my long bus rides doing word and logic puzzles (<a href="https://www.nytimes.com/crosswords">NYT Games</a>, <a href="https://www.minutecryptic.com/">Minute Cryptic</a>, Nonograms, <a href="https://thinkygames.com/">Thinky Games</a>...). when i've got free time at home, i also enjoy <a href="https://steamcommunity.com/id/maestrood">gaming</a>, particularly <a href="https://retroachievements.org/user/maestrood">"retro" games</a> (i recently found out that gamecube games are now considered "retro", which immediately made me feel 1000 years old. what do you mean melee came out 25 years ago???), turn-based strategy (<a href="https://store.steampowered.com/app/470310/">Troubleshooter:AC</a> [i wish more people knew about this!], <a href="https://store.steampowered.com/franchise/XCOM">XCOM</a>, <a href="https://store.steampowered.com/app/1004640/">Final Fantasy Tactics</a>, <a href="https://store.steampowered.com/app/699170/">Fell Seal</a>...) or rogueli(k|t)es (<a href="https://store.steampowered.com/app/1217060/">Gunfire Reborn</a>, <a href="https://store.steampowered.com/app/692890/">Roboquest</a>, <a href="https://store.steampowered.com/app/646570/">Slay the Spire</a>, too many to remember). i have a cat named Maestrood that flew all the way here from the philippines! :)</p>
+        <img class="cat" src="images/cat-small.jpg" alt="Maestrood the cat wearing a purple daisy dress and a jewelled collar" width="160" height="200">
+        </div>
       </div>
     </section>
 
