@@ -262,7 +262,62 @@
     var expr = best.terms.map(function (cb) {
       return cb.spec.map(function (s3, k2) { return s3 === 2 ? "" : vars[k2] + (s3 ? "" : "'"); }).join("");
     }).join(" + ");
-    return { expr: expr, literals: best.lits };
+    return { expr: expr, literals: best.lits, terms: best.terms };
+  }
+
+  /* Print an expression the way the course writes it: NOT as a bar over the negated part.
+     html → <span class="ov">…</span>; text (for dropdown options) → combining overline U+0305. */
+  function boolVars(src) { var v = []; src.replace(/[a-z]/g, function (c) { if (v.indexOf(c) === -1) v.push(c); }); return v; }
+  function printBool(n, html) {
+    function flat(node, op) { return node.op === op ? flat(node.a, op).concat(flat(node.b, op)) : [node]; }
+    function bar(inner) { return html ? "<span class=\"ov\">" + inner + "</span>" : inner.replace(/\s+/g, "").split("").map(function (ch) { return ch + "\u0305"; }).join(""); }
+    switch (n.op) {
+      case "or": return flat(n, "or").map(function (k) { return printBool(k, html); }).join(" + ");
+      /* in plain text, bars on neighbouring letters would merge, so separate factors with · */
+      case "and": return flat(n, "and").map(function (k) { return k.op === "or" ? "(" + printBool(k, html) + ")" : printBool(k, html); }).join(html ? "" : "·");
+      case "not": return bar(printBool(n.a, html));
+      case "const": return n.v ? "1" : "0";
+      default: return n.v;
+    }
+  }
+  function exprHtml(src) { return printBool(parseBool(src, boolVars(src)).tree, true); }
+  function exprText(src) { return printBool(parseBool(src, boolVars(src)).tree, false); }
+  function specText(spec, vars) {
+    var t = spec.map(function (v, k) { return v === 2 ? "" : vars[k] + (v ? "" : "'"); }).join("");
+    return t || "1";
+  }
+  /* Boolean-algebra steps from the sum of minterms to the simplest sum of products. */
+  function deriveSteps(tt, vars, best) {
+    var ms = minterms(tt), n = vars.length;
+    var mSpec = function (m) { var sp = []; for (var k = 0; k < n; k++) sp.push((m >> (n - 1 - k)) & 1); return sp; };
+    var line = function (terms) { return terms.map(function (t) { return exprHtml(t); }).join(" + "); };
+    var out = [p("Start from the sum of minterms: F = " + line(ms.map(function (m) { return specText(mSpec(m), vars); })))];
+    if (!best.terms || !best.terms.length) return out.join("") + p("So F = <strong>" + best.expr + "</strong>.");
+    var uses = {};
+    best.terms.forEach(function (t) { t.cover.forEach(function (m) { uses[m] = (uses[m] || 0) + 1; }); });
+    var twice = ms.filter(function (m) { return uses[m] > 1; });
+    if (twice.length) out.push(p("Some minterms are needed by more than one group, so repeat them using the idempotent law (a + a = a): " +
+      twice.map(function (m) { return exprHtml(specText(mSpec(m), vars)); }).join(", ") + "."));
+    best.terms.forEach(function (t) {
+      var free = [];
+      t.spec.forEach(function (v, k) { if (v === 2) free.push(k); });
+      if (!free.length) { out.push(p(exprHtml(specText(t.spec, vars)) + " has no neighbour to combine with, so it stays as it is.")); return; }
+      var cur = t.cover.map(mSpec), steps = [line(cur.map(function (sp) { return specText(sp, vars); }))];
+      for (var i = free.length - 1; i >= 0; i--) {
+        var f = free[i], groups = {}, order = [];
+        cur.forEach(function (sp) { var key = sp.map(function (v, k) { return k === f ? 2 : v; }).join(""); if (!groups[key]) { groups[key] = sp.map(function (v, k) { return k === f ? 2 : v; }); order.push(key); } });
+        var lit0 = exprHtml(vars[f] + "'"), lit1 = exprHtml(vars[f]);
+        steps.push("= " + order.map(function (key) {
+          var common = specText(groups[key], vars);
+          return (common === "1" ? "" : exprHtml(common)) + "(" + lit0 + " + " + lit1 + ")";
+        }).join(" + ") + "   <span class=\"meta\">(distributive law)</span>");
+        cur = order.map(function (key) { return groups[key]; });
+        steps.push("= " + line(cur.map(function (sp) { return specText(sp, vars); })) + "   <span class=\"meta\">(" + lit0 + " + " + lit1 + " = 1, and a·1 = a)</span>");
+      }
+      out.push("<div class=\"derive\">" + steps.map(function (st) { return "<div>" + st + "</div>"; }).join("") + "</div>");
+    });
+    out.push(p("So F = <strong>" + exprHtml(best.expr) + "</strong>" + " (" + best.literals + " literal" + (best.literals === 1 ? "" : "s") + ")."));
+    return out.join("");
   }
 
   /* ---------- simulators (also exported for tests) ---------- */
@@ -964,7 +1019,7 @@
     var addrs = randomAddrs(R, 10, 6 * c.sets * c.block - 1);
     var stop = R.chance(0.35) ? R.int(5, 8) : 10;           /* sometimes: the state part-way through */
     var sim = simulateCache(c, addrs.slice(0, stop)), full = simulateCache(c, addrs);
-    var hitList = full.steps.map(function (st, i) { return st.hit ? i + 1 : null; }).filter(function (x) { return x !== null; });
+    var hitList = full.steps.filter(function (st) { return st.hit; }).map(function (st) { return st.addr; });
     var fields = [], rows = [], setBits = Math.log2(c.sets);
     sim.sets.forEach(function (lines, si) {
       var answer = lines.map(function (start) { var b = []; for (var k = 0; k < c.block; k++) b.push(start + k); return b; });
@@ -976,7 +1031,7 @@
         rows.push(row);
       }
     });
-    fields.push({ id: "hits", label: "Accesses that hit", kind: "set", answer: hitList, size: 16 });
+    fields.push({ id: "hits", label: "Addresses that hit", kind: "multiset", answer: hitList.slice().sort(function (a, b) { return a - b; }), size: 16 });
     var head = ["Set"];
     for (var b2 = 0; b2 < c.block; b2++) head.push("Byte " + b2);
     head.push("");
@@ -984,13 +1039,13 @@
       prompt: p("Consider " + cfgText(c) + ". It starts empty. " + alignNote(c.block) + " These byte addresses are accessed in order:") +
         table(["Access"].concat(addrs.map(function (_, i) { return i + 1; })), [["Address"].concat(addrs)]) +
         p("Fill in the cache " + (stop < 10 ? "<strong>after access " + stop + "</strong> (address " + addrs[stop - 1] + ")" : "<strong>after all accesses</strong>") +
-          ": write the byte addresses held in each line (lines and bytes in any order; leave unused lines blank). Then list the numbers of the accesses that hit, over all 10 accesses."),
+          ": write the byte addresses held in each line (lines and bytes in any order; leave unused lines blank). Then list the addresses that hit, over all 10 accesses (an address that hits twice is listed twice)."),
       table: { head: head, rows: rows, groups: c.ways },
       wide: true,
       fields: fields,
       solution: simSolution(c, full) + p("Cache " + (stop < 10 ? "after access " + stop : "at the end") + ": " + sim.sets.map(function (l, si) {
         return "set " + si + ": " + (l.length ? l.map(function (st) { return st + "–" + (st + c.block - 1); }).join(", ") : "empty");
-      }).join("; ") + ". Hits on accesses <strong>" + (hitList.length ? hitList.join(", ") : "none") + "</strong>.")
+      }).join("; ") + ". Addresses that hit: <strong>" + (hitList.length ? hitList.join(", ") : "none") + "</strong>.")
     };
   }
 
@@ -1014,9 +1069,13 @@
     var hits = sim.steps.filter(function (s) { return s.hit; }).length, cold = sim.steps.filter(function (s) { return s.cold; }).length;
     var fields = sim.steps.map(function (s, i) { return choice("h" + i, "", ["hit", "miss"], s.hit ? "hit" : "miss"); });
     fields.push(num("rate", "Hit rate", hits * 10, { suffix: "%" }), num("cold", "Cold misses", cold));
+    var helped = R.chance(0.7);                 /* as on many exams, give the tag / set / offset of each access */
+    var helpCols = function (a) { var blk = Math.floor(a / c.block); return [Math.floor(blk / c.sets), blk % c.sets, a % c.block]; };
     return {
       prompt: p("Consider " + cfgText(c) + ". It starts empty. " + alignNote(c.block) + " Mark each access below as a hit or a miss, then give the hit rate and the number of cold misses."),
-      table: { head: ["Access", "Address", "Result"], rows: addrs.map(function (a, i) { return [i + 1, a, { f: "h" + i }]; }) },
+      table: helped
+        ? { head: ["Access", "Address", "Tag", "Set", "Offset", "Result"], rows: addrs.map(function (a, i) { return [i + 1, a].concat(helpCols(a)).concat([{ f: "h" + i }]); }) }
+        : { head: ["Access", "Address", "Result"], rows: addrs.map(function (a, i) { return [i + 1, a, { f: "h" + i }]; }) },
       fields: fields,
       solution: simSolution(c, sim) + p("Hit rate = " + hits + " ÷ 10 = <strong>" + hits * 10 + "%</strong>; cold misses (first touch of a block): <strong>" + cold + "</strong>")
     };
@@ -1106,9 +1165,9 @@
       var vars = ["x", "y", "z"], target = remapExpr(R.pick(SIMPLE_FORMS), randomRemap(R, vars)), tt = ttOf(target, vars), best = minSop(tt, vars);
       var given = minterms(tt).map(function (m) { return mintermText(m, vars); }).join(" + ");
       return {
-        prompt: p("Simplify") + p("<span class=\"expr\">F = " + esc(given) + "</span>") + p("Type " + code("x'") + " for NOT x, " + code("+") + " for OR, and put variables side by side for AND."),
+        prompt: p("Simplify") + p("<span class=\"expr\">F = " + exprHtml(given) + "</span>") + p("Type " + code("x'") + " for " + exprHtml("x'") + ", " + code("+") + " for OR, and put variables side by side for AND."),
         fields: [{ id: "e", label: "F =", kind: "bool", vars: vars, table: tt, maxLiterals: best.literals, example: best.expr, size: 22 }],
-        solution: p("A simplest form is <strong>F = " + esc(best.expr) + "</strong> (" + best.literals + " literals). Combine minterms that differ in one variable using xy + xy' = x.")
+        solution: deriveSteps(tt, vars, best)
       };
     },
     function (R) {
@@ -1116,9 +1175,9 @@
       for (var m = 0; m < 8; m++) tt.push(cond.f(two ? sx(m, 3) : m) ? 1 : 0);
       var best = minSop(tt, vars);
       return {
-        prompt: p("The bits a b c (a is the most significant) represent a 3-bit " + (two ? "<strong>two's complement</strong>" : "<strong>unsigned</strong>") + " number. Write a simplest Boolean expression for y, where y = 1 exactly when " + cond.t + "."),
+        prompt: p("The bits a b c (a is the most significant) represent a 3-bit " + (two ? "<strong>two's complement</strong>" : "<strong>unsigned</strong>") + " number. Write a simplest Boolean expression for y, where y = 1 exactly when " + cond.t + ". (Type " + code("a'") + " for " + exprHtml("a'") + ".)"),
         fields: [{ id: "e", label: "y =", kind: "bool", vars: vars, table: tt, maxLiterals: best.literals, example: best.expr, size: 22 }],
-        solution: table(["a b c", "value", "y"], tt.map(function (v, k) { return [bin(k, 3), two ? sx(k, 3) : k, v]; })) + p("Simplest form: <strong>y = " + esc(best.expr) + "</strong>")
+        solution: table(["a b c", "value", "y"], tt.map(function (v, k) { return [bin(k, 3), two ? sx(k, 3) : k, v]; })) + deriveSteps(tt, vars, best).replace(/F = /g, "y = ")
       };
     },
     function (R) {
@@ -1129,9 +1188,9 @@
         if (ttOf(e, vars).join("") !== tt.join("") && opts.indexOf(e) === -1) opts.push(e);
       }
       return {
-        prompt: p("Which expression is equivalent to <span class=\"expr\">F = " + esc(given) + "</span>?"),
-        fields: [choice("c", "F =", R.shuffle(opts), right, { wide: true })],
-        solution: p("<strong>" + esc(right) + "</strong> is 1 for exactly the same minterms (" + minterms(tt).join(", ") + ").")
+        prompt: p("Which expression is equivalent to <span class=\"expr\">F = " + exprHtml(given) + "</span>?"),
+        fields: [choice("c", "F =", R.shuffle(opts).map(exprText), exprText(right), { wide: true })],
+        solution: deriveSteps(tt, vars, minSop(tt, vars))
       };
     }
   ]);
@@ -1143,10 +1202,10 @@
       var fields = tt.map(function (v, i) { return bit("r" + i, v); });
       fields.push({ id: "m", label: "Minterms where F = 1", kind: "set", answer: ms, size: 16 });
       return {
-        prompt: p("Complete the truth table for <span class=\"expr\">F = " + esc(e) + "</span>, then list the rows where F = 1."),
+        prompt: p("Complete the truth table for <span class=\"expr\">F = " + exprHtml(e) + "</span>, then list the rows where F = 1."),
         table: { head: ["Row", "x", "y", "z", "F"], rows: tt.map(function (v, i) { return [i, (i >> 2) & 1, (i >> 1) & 1, i & 1, { f: "r" + i }]; }) },
         fields: fields,
-        solution: p("F = Σm(" + ms.join(", ") + ") = " + ms.map(function (m) { return mintermText(m, vars); }).join(" + "))
+        solution: p("F = Σm(" + ms.join(", ") + ") = " + exprHtml(ms.map(function (m) { return mintermText(m, vars); }).join(" + ")))
       };
     },
     function (R) {
@@ -1155,7 +1214,7 @@
       return {
         prompt: p("Write a simplest Boolean expression for F from its truth table.") + table(["a", "b", "c", "F"], tt.map(function (v, m) { return [(m >> 2) & 1, (m >> 1) & 1, m & 1, v]; })),
         fields: [{ id: "e", label: "F =", kind: "bool", vars: vars, table: tt, maxLiterals: best.literals, example: best.expr, size: 22 }],
-        solution: p("Sum of minterms: F = " + minterms(tt).map(function (m) { return mintermText(m, vars); }).join(" + ") + ". Simplified: <strong>F = " + esc(best.expr) + "</strong>")
+        solution: deriveSteps(tt, vars, best)
       };
     },
     function (R) {
@@ -1164,8 +1223,8 @@
       for (var i = 1; i < forms.length && opts.length < 4; i++) if (ttOf(forms[i], vars).join("") !== tt.join("")) opts.push(forms[i]);
       return {
         prompt: p("Which formula has this truth table?") + table(["a", "b", "c", "F"], tt.map(function (v, m) { return [(m >> 2) & 1, (m >> 1) & 1, m & 1, v]; })),
-        fields: [choice("c", "F =", R.shuffle(opts), right, { wide: true })],
-        solution: p("<strong>F = " + esc(right) + "</strong>: it is 1 exactly in rows " + minterms(tt).join(", ") + ".")
+        fields: [choice("c", "F =", R.shuffle(opts).map(exprText), exprText(right), { wide: true })],
+        solution: p("<strong>F = " + exprHtml(right) + "</strong>: it is 1 exactly in rows " + minterms(tt).join(", ") + ".") + deriveSteps(tt, vars, minSop(tt, vars))
       };
     }
   ]);
@@ -1181,7 +1240,7 @@
     if (type === "D") return { D: R.int(0, 1) };
     var s = R.int(0, 1); return { S: s, R: s ? 0 : R.int(0, 1) };
   }
-  var FF_RULE = { JK: "Q<sub>next</sub> = J·Q' + K'·Q (J = K = 1 toggles)", T: "Q<sub>next</sub> = T xor Q", D: "Q<sub>next</sub> = D", SR: "Q<sub>next</sub> = S + R'·Q (S sets, R resets, S = R = 1 not allowed)" };
+  var FF_RULE = { JK: "Q<sub>next</sub> = J·<span class=\"ov\">Q</span> + <span class=\"ov\">K</span>·Q (J = K = 1 toggles)", T: "Q<sub>next</sub> = T xor Q", D: "Q<sub>next</sub> = D", SR: "Q<sub>next</sub> = S + <span class=\"ov\">R</span>·Q (S sets, R resets, S = R = 1 not allowed)" };
   G["sequential/flip-flops"] = variants([
     function (R) {
       var type = R.pick(["JK", "T", "D", "SR"]), q = R.int(0, 1), q0 = q, ins = [], cur = [], next = [];
@@ -2057,6 +2116,13 @@
       var uniq = vals.filter(function (v, i) { return vals.indexOf(v) === i; }).sort(function (a, b) { return a - b; });
       return { ok: uniq.length === f.answer.length && uniq.every(function (v, i) { return v === f.answer[i]; }) };
     },
+    /* numbers in any order, duplicates count */
+    multiset: function (f, raw) {
+      var vals = parseNums(raw);
+      if (vals.some(isNaN)) return { ok: false, note: "Use numbers separated by commas." };
+      vals.sort(function (a, b) { return a - b; });
+      return { ok: vals.length === f.answer.length && vals.every(function (v, i) { return v === f.answer[i]; }) };
+    },
     list: function (f, raw) {
       var vals = parseNums(raw);
       if (vals.some(isNaN)) return { ok: false, note: "Use numbers separated by commas." };
@@ -2145,7 +2211,7 @@
       return CHECKERS.cacheset(field, raw || []);
     }
     raw = raw === undefined || raw === null ? "" : String(raw);
-    if (raw.trim() === "" && field.kind !== "set") return { ok: false, blank: true };
+    if (raw.trim() === "" && field.kind !== "set" && field.kind !== "multiset") return { ok: false, blank: true };
     return CHECKERS[field.kind](field, raw);
   }
   function sampleAnswer(f) {
@@ -2153,7 +2219,7 @@
       case "number": return exact(f.answer, 2) ? String(f.answer) : String(round(f.answer, 4));
       case "text": return f.accept[0];
       case "choice": return f.answer;
-      case "set": case "list": return f.answer.join(", ");
+      case "set": case "list": case "multiset": return f.answer.join(", ");
       case "hex": return hex(f.answer, 1);
       case "bits": return f.answer;
       case "reg": return REGS[f.answer];
@@ -2173,6 +2239,6 @@
     generate: generate, check: check, sampleAnswer: sampleAnswer,
     _sim: { simulateCache: simulateCache, classifyMisses: classifyMisses, simulateMesi: simulateMesi, classifySharing: classifySharing,
       findDependencies: findDependencies, pipelineStalls: pipelineStalls, minSchedule: minSchedule, parseBool: parseBool, truthTable: truthTable,
-      encode: encode, minSop: minSop, parseNum: parseNum }
+      encode: encode, minSop: minSop, parseNum: parseNum, exprHtml: exprHtml, exprText: exprText, deriveSteps: deriveSteps }
   };
 })(typeof window !== "undefined" ? window : globalThis);

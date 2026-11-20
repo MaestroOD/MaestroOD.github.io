@@ -68,7 +68,7 @@ window.CS3350 = {
       ],
       problems: [
         { id: "address-bits", title: "tag, index and offset" },
-        { id: "cache-sim", title: "simulating a cache (LRU)" },
+        { id: "cache-sim", title: "simulating a cache" },
         { id: "hit-rate", title: "counting hits and misses" }
       ]
     },
@@ -86,7 +86,7 @@ window.CS3350 = {
         "n-bit two's complement range: −2ⁿ⁻¹ to 2ⁿ⁻¹ − 1",
         "negate in two's complement: invert every bit, then add 1",
         "signed overflow: adding two numbers with the same sign gives a result with the other sign",
-        "De Morgan's laws: (xy)' = x' + y' and (x + y)' = x'y'"
+        "De Morgan's laws: <span class=\"ov\">xy</span> = <span class=\"ov\">x</span> + <span class=\"ov\">y</span> and <span class=\"ov\">x + y</span> = <span class=\"ov\">x</span><span class=\"ov\">y</span>"
       ],
       problems: [
         { id: "twos-complement", title: "two's complement" },
@@ -106,8 +106,8 @@ window.CS3350 = {
         "of a synchronous circuit; and implementing a finite state machine as a state register plus " +
         "combinational logic.",
       keyIdeas: [
-        "JK flip-flop: Q_next = J·Q' + K'·Q",
-        "T flip-flop: Q_next = T xor Q; D flip-flop: Q_next = D",
+        "JK flip-flop: Q<sub>next</sub> = J·<span class=\"ov\">Q</span> + <span class=\"ov\">K</span>·Q",
+        "T flip-flop: Q<sub>next</sub> = T xor Q; D flip-flop: Q<sub>next</sub> = D",
         "minimum clock period = clk-to-q delay + longest combinational delay + setup time",
         "an FSM's logic maps (present state, input) to (next state, output)"
       ],

@@ -99,7 +99,7 @@
       var ideas = document.getElementById("topic-ideas");
       t.keyIdeas.forEach(function (k) {
         var li = document.createElement("li");
-        li.textContent = k;
+        li.innerHTML = k;   /* our own text; may contain <span class="ov"> bars */
         ideas.appendChild(li);
       });
 
