@@ -741,3 +741,5 @@ body.app .brand { font-size: 1.1rem; }
 .answer-table .mark-cell { border: 0; padding-left: 2px; }
 .answer-form .answer-table input[data-part] { text-align: center; padding: 2px 3px; }
 .problem-prompt .problem-table { display: block; max-width: 100%; overflow-x: auto; }
+
+.course-links { margin: 14px 0 0; font-size: 1.05rem; color: var(--muted); }

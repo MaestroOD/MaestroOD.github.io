@@ -403,17 +403,6 @@
     return maxOf(depth);
   }
 
-  /* Present a multiple-choice question bank: pick n questions, shuffle their options. */
-  function quiz(R, bank, n, intro) {
-    var qs = R.shuffle(bank).slice(0, n), fields = [], sol = [];
-    qs.forEach(function (q, k) {
-      var opts = R.shuffle(q.o.slice());
-      fields.push(choice("q" + k, (k + 1) + ". " + q.q, opts, q.o[0], { wide: true }));
-      sol.push("<strong>" + (k + 1) + ". " + esc(q.o[0]) + "</strong> — " + q.why);
-    });
-    return { prompt: p(intro || "Choose the best answer for each question."), fields: fields, solution: ul(sol), layout: "stack" };
-  }
-
   /* =====================================================================
      Generators, keyed "topic/problem"
      ===================================================================== */
@@ -680,17 +669,6 @@
     }
   ]);
 
-  G["performance/concepts"] = function (R) {
-    return quiz(R, [
-      { q: "Which of these is NOT part of the classic CPU time equation?", o: ["Cache capacity", "Instruction count", "CPI", "Clock cycle time"], why: "CPU time = instruction count × CPI × clock cycle time; cache effects show up only indirectly, through CPI." },
-      { q: "If the clock rate doubles and nothing else changes, CPU time…", o: ["halves", "doubles", "stays the same", "drops to a quarter"], why: "Time is inversely proportional to clock rate." },
-      { q: "A compiler change lowers the instruction count but raises the CPI. The program gets faster exactly when…", o: ["instruction count × CPI decreases", "CPI decreases", "instruction count decreases", "the clock rate increases"], why: "With a fixed clock, time is proportional to the product of instruction count and CPI." },
-      { q: "Throughput measures…", o: ["work completed per unit of time", "the time to finish one task", "the clock frequency", "the number of cores"], why: "Latency is the time for one task; throughput is tasks per unit time." },
-      { q: "If 20% of a program's time cannot be improved, the overall speedup can never exceed…", o: ["5", "20", "1.25", "80"], why: "Amdahl's law: speedup ≤ 1 ÷ 0.2 = 5." },
-      { q: "Why did processor clock rates stop rising quickly in the mid-2000s?", o: ["Power and heat limits (the power wall)", "Transistors stopped shrinking", "Memory became too slow to read", "Compilers could not keep up"], why: "Dynamic power grows with clock rate, and chips could not shed the heat." },
-      { q: "Which instruction usually takes the most cycles on a simple processor?", o: ["A load that misses in the cache", "A register-to-register add", "A logical AND", "A shift"], why: "A cache miss adds many stall cycles." }
-    ], 3);
-  };
 
   /* ----- 2. Memory hierarchy ----- */
   G["memory/amat"] = variants([
@@ -855,18 +833,6 @@
     }
   ]);
 
-  G["memory/concepts"] = function (R) {
-    return quiz(R, [
-      { q: "L1 caches are usually built from…", o: ["SRAM", "DRAM", "flash memory", "magnetic disk"], why: "SRAM is fast enough for the cache closest to the processor." },
-      { q: "Average memory access time (AMAT) measures…", o: ["the average time per memory access, over hits and misses", "the time of a cache hit", "the time of a cache miss", "how much memory a program uses"], why: "AMAT = hit time + miss rate × miss penalty." },
-      { q: "A loop that reads an array in order mostly benefits from…", o: ["spatial locality", "temporal locality of the array elements", "neither kind of locality", "a larger register file"], why: "Neighbouring elements share cache blocks." },
-      { q: "The first ever access to a block always causes a…", o: ["cold (compulsory) miss", "conflict miss", "capacity miss", "hit"], why: "The block has never been in the cache." },
-      { q: "Which change most directly reduces conflict misses?", o: ["Increasing associativity", "Increasing block size", "Using write-through", "Decreasing capacity"], why: "More ways per set means fewer blocks evict each other." },
-      { q: "Which change most directly reduces cold misses?", o: ["Larger blocks", "Higher associativity", "LRU instead of FIFO", "A smaller cache"], why: "Each miss brings in more neighbouring data." },
-      { q: "The \"memory wall\" refers to…", o: ["the growing gap between processor speed and memory speed", "the maximum size of main memory", "cache coherence traffic", "the limit on the number of registers"], why: "Processors got faster much more quickly than DRAM." },
-      { q: "The main design goal for an L1 cache is usually a low…", o: ["hit time", "capacity", "associativity", "block size"], why: "L1 is accessed on every load and store, so its speed matters most; L2 focuses on a low miss rate." }
-    ], 3);
-  };
 
   /* ----- 3. Cache organization ----- */
   G["caches/address-bits"] = variants([
@@ -998,18 +964,6 @@
     };
   };
 
-  G["caches/concepts"] = function (R) {
-    return quiz(R, [
-      { q: "In a direct-mapped cache, a block can be placed in…", o: ["exactly one line", "any line", "any line of one set of several", "two lines"], why: "Direct-mapped means one way per set." },
-      { q: "How many sets does a fully associative cache have?", o: ["1", "One per block", "2", "It depends on the block size"], why: "All lines belong to a single set." },
-      { q: "A write-through cache…", o: ["updates memory on every write", "updates memory only when a dirty line is evicted", "never updates memory", "does not cache written data"], why: "Write-back is the one that waits until eviction." },
-      { q: "A write-back cache needs an extra bit per line called the…", o: ["dirty bit", "valid bit", "sign bit", "parity bit"], why: "It records whether the line differs from memory." },
-      { q: "Why are the middle address bits used as the set index?", o: ["So consecutive blocks map to different sets", "Because the top bits are always zero", "To make the tag shorter", "Because the offset needs the top bits"], why: "Programs touch neighbouring blocks, which should not collide." },
-      { q: "LRU replacement evicts the block that…", o: ["was used least recently", "was loaded first", "was used most recently", "is chosen at random"], why: "FIFO is the one that evicts the block loaded first." },
-      { q: "Doubling associativity while keeping capacity and block size fixed…", o: ["halves the number of sets", "doubles the number of sets", "doubles the block size", "removes the tag"], why: "Index loses one bit and the tag gains one." },
-      { q: "On a cache hit with FIFO replacement…", o: ["the replacement order does not change", "the block moves to the back of the queue", "the block is evicted", "the whole set is flushed"], why: "FIFO only tracks arrival order." }
-    ], 3);
-  };
 
   /* ----- 4. Numbers and logic ----- */
   function sx(n, w) { n &= (1 << w) - 1; return n >= (1 << (w - 1)) ? n - (1 << w) : n; }
@@ -1158,18 +1112,6 @@
     }
   ]);
 
-  G["logic/concepts"] = function (R) {
-    return quiz(R, [
-      { q: "Which single operator is functionally complete on its own?", o: ["NAND", "AND", "OR", "XOR"], why: "NOT, AND and OR can all be built from NAND alone (NOR works too)." },
-      { q: "In two's complement, you negate a number by…", o: ["inverting every bit and adding 1", "inverting every bit", "flipping the sign bit", "subtracting 1 and inverting"], why: "Inverting alone gives one's complement." },
-      { q: "Sign-extending a negative 8-bit number to 16 bits fills the new bits with…", o: ["1s", "0s", "a copy of the low byte", "alternating bits"], why: "Copies of the sign bit preserve the value." },
-      { q: "Signed overflow can only occur when you add two numbers that…", o: ["have the same sign", "have different signs", "are both zero", "are powers of two"], why: "Adding numbers of opposite signs moves toward zero." },
-      { q: "A multiplexer choosing among 8 inputs needs how many select bits?", o: ["3", "8", "2", "4"], why: "2³ = 8." },
-      { q: "(x + y)' equals…", o: ["x'y'", "x' + y'", "xy", "x + y"], why: "De Morgan's law." },
-      { q: "x + xy simplifies to…", o: ["x", "y", "xy", "x + y"], why: "Absorption: x(1 + y) = x." },
-      { q: "What is −20 in 6-bit one's complement?", o: ["101011", "101100", "010100", "110100"], why: "20 = 010100; invert every bit: 101011." }
-    ], 3);
-  };
 
   /* ----- 5. Sequential circuits ----- */
   function ffNext(type, q, i) {
@@ -1297,17 +1239,6 @@
     }
   ]);
 
-  G["sequential/concepts"] = function (R) {
-    return quiz(R, [
-      { q: "Which of these does NOT limit the maximum clock frequency?", o: ["Hold time", "Setup time", "clk-to-q delay", "Combinational propagation delay"], why: "Hold time constrains the shortest paths, not the clock period." },
-      { q: "A JK flip-flop with J = K = 1 will…", o: ["toggle", "reset to 0", "set to 1", "keep its value"], why: "J = K = 1 is the toggle case." },
-      { q: "Which SR flip-flop input combination is not allowed?", o: ["S = 1, R = 1", "S = 0, R = 0", "S = 1, R = 0", "S = 0, R = 1"], why: "Setting and resetting at once leaves the next state unpredictable." },
-      { q: "Loading 8 new bits into an 8-bit serial-in, serial-out register takes…", o: ["8 clock cycles", "1 clock cycle", "4 clock cycles", "16 clock cycles"], why: "One bit enters per cycle." },
-      { q: "Setup time is how long the input must be stable…", o: ["before the clock edge", "after the clock edge", "for a whole clock period", "while the clock is low"], why: "Hold time is the requirement after the edge." },
-      { q: "An FSM with 5 states needs at least how many state bits?", o: ["3", "2", "5", "4"], why: "2 bits give only 4 states." },
-      { q: "In an edge-triggered D flip-flop, the output changes…", o: ["only at the clock edge", "whenever D changes", "while the clock is high", "never"], why: "That is what makes circuits synchronous." }
-    ], 3);
-  };
 
   /* ----- 6. MIPS ----- */
   G["mips/encode"] = variants([
@@ -1476,18 +1407,6 @@
     };
   };
 
-  G["mips/concepts"] = function (R) {
-    return quiz(R, [
-      { q: "Which field appears in every MIPS instruction format?", o: ["opcode", "rs", "rd", "immediate"], why: "J-type instructions have only an opcode and an address." },
-      { q: "How many instruction formats does MIPS have?", o: ["3", "2", "4", "More than 10"], why: "R-type, I-type and J-type." },
-      { q: "Where does jal put the return address?", o: ["$ra", "$sp", "$v0", "$a0"], why: "jr $ra returns to it." },
-      { q: "Local variables of a function call are stored in…", o: ["the stack", "the heap", "the static data segment", "the text segment"], why: "Each call gets a stack frame." },
-      { q: "Memory allocated with malloc comes from…", o: ["the heap", "the stack", "the text segment", "registers"], why: "The heap holds dynamically allocated data." },
-      { q: "Branch offsets in MIPS are counted in…", o: ["words, relative to PC + 4", "bytes, relative to PC", "words, from address 0", "bytes, relative to PC + 4"], why: "Target = PC + 4 + offset × 4." },
-      { q: "Why does loading a 32-bit constant take two instructions (lui and ori)?", o: ["Immediates are only 16 bits", "Registers are 16 bits", "ori can only set one bit", "Constants live in memory"], why: "Each I-type immediate field has 16 bits." },
-      { q: "lw uses which instruction format?", o: ["I-type", "R-type", "J-type", "It has its own format"], why: "The offset is the immediate field." }
-    ], 3);
-  };
 
   /* ----- 7. Datapath ----- */
   var CONTROL = {
@@ -1567,17 +1486,6 @@
       };
     }
   ]);
-  G["datapath/concepts"] = function (R) {
-    return quiz(R, [
-      { q: "In a single-cycle datapath, the clock period is set by…", o: ["the slowest instruction", "the fastest instruction", "the slowest stage", "the register file alone"], why: "Every instruction must finish in one cycle." },
-      { q: "Which stage reads or writes data memory?", o: ["MEM", "ID", "EX", "WB"], why: "Only loads and stores use it." },
-      { q: "Which of these does NOT happen in the ID stage?", o: ["The ALU computes the result", "The instruction is decoded", "Source registers are read", "The immediate is sign-extended"], why: "The ALU works in EX." },
-      { q: "ExtOp chooses between…", o: ["sign- and zero-extension of the immediate", "the two ALU inputs", "the next PC values", "reading and writing memory"], why: "addi needs sign extension; ori needs zero extension." },
-      { q: "MemtoReg chooses…", o: ["whether the register write data comes from the ALU or memory", "whether memory is written", "which register is written", "the ALU operation"], why: "Loads write memory data; ALU instructions write the ALU result." },
-      { q: "Which instruction does not write a register?", o: ["sw", "lw", "addi", "slt"], why: "Stores only write memory." },
-      { q: "Why is a single-cycle design inefficient?", o: ["Every instruction takes as long as the slowest one", "It needs more registers", "It cannot run branches", "It needs two memories"], why: "Fast instructions wait out the long clock." }
-    ], 3);
-  };
 
   /* ----- 8. Pipelining ----- */
   function randomDepCode(R, n, pool) {
@@ -1683,16 +1591,6 @@
       };
     }
   ]);
-  G["pipelining/concepts"] = function (R) {
-    return quiz(R, [
-      { q: "Pipelining mainly improves…", o: ["throughput", "the latency of a single instruction", "the clock-to-q delay", "the miss rate"], why: "Each instruction still passes through every stage." },
-      { q: "Ideal speedup equals the number of stages when…", o: ["stages are balanced and the pipeline stays full", "the pipeline has 5 stages", "every instruction is a load", "forwarding is disabled"], why: "Unequal stages or bubbles reduce the speedup." },
-      { q: "Which dependency never causes a hazard?", o: ["Read after read", "Read after write", "Write after read", "Write after write"], why: "Reading twice changes nothing." },
-      { q: "How does the classic MIPS pipeline avoid the register-file structural hazard?", o: ["Write in the first half of the cycle, read in the second", "Duplicate the register file", "Stall every other cycle", "Use forwarding"], why: "Both can then happen in the same cycle." },
-      { q: "Even with forwarding, which sequence needs a stall?", o: ["A load followed immediately by an instruction using its result", "Two independent adds", "An add followed by a dependent add", "A store followed by a load"], why: "The loaded value is not ready until after MEM." },
-      { q: "With branch prediction, how many nops must the compiler insert after a branch?", o: ["0", "1", "2", "It depends on the program"], why: "The hardware guesses and flushes on a misprediction." }
-    ], 3);
-  };
 
   /* ----- 9. ILP ----- */
   function renameRun(R) {
@@ -1804,16 +1702,6 @@
     };
   }
   G["ilp/vliw"] = variants([vliwAny, vliwTyped]);
-  G["ilp/concepts"] = function (R) {
-    return quiz(R, [
-      { q: "Register renaming removes which dependencies?", o: ["WAR and WAW", "RAW only", "RAW and WAR", "All of them"], why: "True (RAW) dependencies carry real data and remain." },
-      { q: "A CPI below 1 requires…", o: ["issuing more than one instruction per cycle", "a deeper pipeline", "a bigger cache", "forwarding"], why: "One instruction per cycle gives CPI ≥ 1." },
-      { q: "In a VLIW processor, which instructions issue together is decided by…", o: ["the compiler", "the hardware at run time", "the operating system", "the programmer, by hand"], why: "Dynamic superscalar processors decide in hardware." },
-      { q: "Loop unrolling helps mainly by…", o: ["reducing loop overhead and exposing independent instructions", "reducing the code size", "removing true dependencies", "shortening the clock"], why: "Fewer branches and counter updates, and more work to schedule." },
-      { q: "A cost of loop unrolling is…", o: ["larger code and more registers", "more branches", "a longer critical path", "more cache coherence traffic"], why: "The body is duplicated." },
-      { q: "A dynamic superscalar processor with 4 execution units that fetches 1 instruction per cycle has a minimum CPI of…", o: ["1", "0.25", "0.5", "4"], why: "It cannot finish instructions faster than it fetches them." }
-    ], 3);
-  };
 
   /* ----- 10. Multicore ----- */
   G["multicore/mesi"] = variants([function (R) {
@@ -1897,17 +1785,6 @@
       solution: p("Each thread reads, adds " + k + " and writes back. If threads read before others write, their updates overwrite each other, so anywhere from 1 to " + n + " updates survive: <strong>" + vals.join(", ") + "</strong>.")
     };
   };
-  G["multicore/concepts"] = function (R) {
-    return quiz(R, [
-      { q: "Under Flynn's taxonomy, a multicore processor is…", o: ["MIMD", "SISD", "SIMD", "MISD"], why: "Each core runs its own instruction stream on its own data." },
-      { q: "A single-core processor with no vector instructions is…", o: ["SISD", "SIMD", "MIMD", "MISD"], why: "One instruction stream, one data stream." },
-      { q: "In MESI, a block that is in exactly one cache and matches memory is…", o: ["Exclusive", "Modified", "Shared", "Invalid"], why: "Modified means it differs from memory." },
-      { q: "False sharing happens when cores…", o: ["use different words that share a cache block, and at least one writes", "read the same word", "use different blocks", "never write"], why: "The block bounces between caches although no data is actually shared." },
-      { q: "A data race needs two threads that…", o: ["access the same location without synchronization, at least one writing", "read the same location", "run on different cores", "use different locks"], why: "Concurrent reads alone are harmless." },
-      { q: "Snooping coherence protocols work by…", o: ["having every cache watch a shared bus", "keeping all data in memory", "giving each core a separate memory", "disabling caches for shared data"], why: "Caches react to each other's bus traffic." },
-      { q: "Under write-invalidate, when a core writes a shared block, the other copies are…", o: ["invalidated", "updated with the new value", "written back to disk", "left unchanged"], why: "Write-update protocols are the ones that send the new value." }
-    ], 3);
-  };
 
   /* ----- 11. GPU ----- */
   G["gpu/divergence"] = variants([function (R) {
@@ -1971,17 +1848,6 @@
         p("Struct of arrays: the 32 x values are contiguous (128 bytes) = <strong>1</strong> transaction. This is why GPU code prefers struct-of-arrays layouts.")
     };
   }]);
-  G["gpu/concepts"] = function (R) {
-    return quiz(R, [
-      { q: "Threads in a warp…", o: ["execute the same instruction together", "each run a different program", "run on different GPUs", "never share memory"], why: "This is SIMT execution." },
-      { q: "A warp on current NVIDIA GPUs has…", o: ["32 threads", "16 threads", "64 threads", "1024 threads"], why: "Thread blocks are split into warps of 32." },
-      { q: "When threads in a warp take different branches…", o: ["the paths run one after the other, with some threads idle", "each thread runs its path in parallel at no cost", "the warp is cancelled", "the GPU hands the work to the CPU"], why: "This is branch divergence." },
-      { q: "A memory access is coalesced when…", o: ["the threads of a warp touch consecutive addresses", "each thread uses its own cache", "accesses go through the CPU", "all threads read the same address from different warps"], why: "Consecutive addresses combine into few transactions." },
-      { q: "GPU shared memory is…", o: ["small, fast on-chip memory shared by a thread block", "the GPU's main DRAM", "memory shared with the CPU", "the L3 cache"], why: "The programmer manages it explicitly." },
-      { q: "Tensor cores speed up…", o: ["matrix multiply-accumulate", "branch prediction", "cache coherence", "integer division"], why: "They target the core operation of deep learning." },
-      { q: "Compared with CPUs, GPUs spend more chip area on…", o: ["arithmetic units", "branch predictors", "large caches", "out-of-order control"], why: "They trade single-thread speed for throughput." }
-    ], 3);
-  };
 
   /* =====================================================================
      Answer checking

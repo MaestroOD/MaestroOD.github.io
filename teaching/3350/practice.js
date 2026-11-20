@@ -172,9 +172,9 @@
       }).join("") + "</div>";
     }
     html += "</div><div class=\"actions\">" +
-      "<button class=\"button primary\" type=\"submit\">Check answer</button>" +
-      "<button class=\"button\" type=\"button\" id=\"new-problem\">New problem</button>" +
-      "<button class=\"button\" type=\"button\" id=\"show-solution\">Show solution</button>" +
+      "<button class=\"button primary\" type=\"submit\">check answer</button>" +
+      "<button class=\"button\" type=\"button\" id=\"new-problem\">new problem</button>" +
+      "<button class=\"button\" type=\"button\" id=\"show-solution\">show solution</button>" +
       "</div></form><div class=\"feedback\" id=\"feedback\" role=\"status\" aria-live=\"polite\"></div></div>" +
       "<aside class=\"solution\" id=\"solution\" hidden></aside></div>";
     body.innerHTML = html;
@@ -250,7 +250,7 @@
         popRank(store.streak);
       }
       fb.className = "feedback is-right";
-      fb.innerHTML = "<strong>Correct!</strong>";
+      fb.innerHTML = "<strong>correct!</strong>";
       if (!quiet) { state.item.shown = true; save(); }
       reveal();
       if (!quiet) fb.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -258,8 +258,8 @@
     }
     if (!quiet && !blank && !state.item.scored) { store.streak = 0; save(); }
     fb.className = "feedback is-wrong";
-    var msg = "<strong>Not quite.</strong> " + (n > 1 ? right + " of " + n + " correct." : "") +
-      (blank ? " Fill in every answer." : "");
+    var msg = "<strong>not quite.</strong> " + (n > 1 ? right + " of " + n + " correct." : "") +
+      (blank ? " fill in every answer." : "");
     if (notes.length) msg += "<ul>" + notes.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + "</ul>";
     fb.innerHTML = msg;
     if (!quiet) fb.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -267,7 +267,7 @@
 
   function reveal() {
     var sol = document.getElementById("solution");
-    sol.innerHTML = "<h4>Solution</h4>" + state.gen.solution;
+    sol.innerHTML = "<h4>solution</h4>" + state.gen.solution;
     sol.hidden = false;
     /* wide answer tables need the full width, so their solution goes underneath instead */
     if (!state.gen.wide && !(state.gen.table && state.gen.table.head.length >= 5)) document.getElementById("problem-grid").classList.add("has-solution");
