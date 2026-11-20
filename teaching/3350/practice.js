@@ -9,6 +9,15 @@
   var titleEl = document.getElementById("problem-title");
   var crumbEl = document.getElementById("problem-topic");
   var body = document.getElementById("problem-body");
+  var panel = document.getElementById("problem-panel");
+  var toggle = document.getElementById("menu-toggle");
+  var toggleLabel = document.getElementById("menu-toggle-label");
+  /* Phones: the menu is a drop-down opened by the ☰ button. */
+  function setMenuOpen(open) {
+    menu.classList.toggle("is-open", open);
+    toggle.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+  toggle.addEventListener("click", function () { setMenuOpen(!menu.classList.contains("is-open")); });
   var STORE_KEY = "cs3350-practice-v1";
 
   /* ---------- saved state ---------- */
@@ -22,7 +31,7 @@
   }
   function newSeed() { return (Math.random() * 4294967296) >>> 0; }
   function itemFor(key) {
-    if (!store.items[key]) store.items[key] = { seed: newSeed(), values: {}, checked: false, shown: false };
+    if (!store.items[key]) { store.items[key] = { seed: newSeed(), values: {}, checked: false, shown: false }; save(); }
     return store.items[key];
   }
 
@@ -64,7 +73,9 @@
     var a = e.target.closest("a[data-t]");
     if (!a || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
     e.preventDefault();
+    var isTopic = a.classList.contains("menu-topic");
     select(a.getAttribute("data-t"), a.getAttribute("data-p"));
+    if (!isTopic) setMenuOpen(false);
   });
 
   function select(slug, pid) {
@@ -77,6 +88,8 @@
     history.replaceState(null, "", "?t=" + t.slug + "&p=" + p.id);
     renderMenu();
     renderProblem(false);
+    toggleLabel.textContent = t.title + " › " + p.title;
+    panel.scrollTop = 0;
   }
 
   /* ---------- problem ---------- */
@@ -127,7 +140,7 @@
     }
     gen.fields.forEach(function (f) {
       if (placed[f.id]) return;
-      html += "<div class=\"answer-row\"><label for=\"ans-" + f.id + "\">" + esc(f.label) + "</label>" + inputHtml(f, false) + "</div>";
+      html += "<div class=\"answer-row" + (f.wide ? " is-wide" : "") + "\"><label for=\"ans-" + f.id + "\">" + esc(f.label) + "</label>" + inputHtml(f, false) + "</div>";
     });
     html += "<div class=\"actions\">" +
       "<button class=\"button primary\" type=\"submit\">Check answer</button>" +
@@ -156,6 +169,7 @@
     });
     document.getElementById("show-solution").addEventListener("click", function () {
       item.shown = true; save(); reveal();
+      document.getElementById("solution").scrollIntoView({ block: "nearest", behavior: "smooth" });
     });
     if (focus) {
       var first = body.querySelector("input, select");
@@ -199,6 +213,7 @@
       fb.innerHTML = "<strong>Correct!</strong> Try a new problem, or read the worked solution below.";
       if (!quiet) { state.item.shown = true; save(); }
       reveal();
+      if (!quiet) fb.scrollIntoView({ block: "nearest", behavior: "smooth" });
       return;
     }
     fb.className = "feedback is-wrong";
@@ -206,6 +221,7 @@
       (blank ? "Fill in every answer, then check again." : "Have another go, or use “Show solution” to see the working.");
     if (notes.length) msg += "<ul>" + notes.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + "</ul>";
     fb.innerHTML = msg;
+    if (!quiet) fb.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }
 
   function reveal() {

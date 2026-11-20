@@ -1,10 +1,15 @@
 /* CS 3350A practice problem generators and answer checkers.
 
-   Every generator is a pure function of a seeded random source, so a problem can be
-   rebuilt exactly from its seed (that is how the practice page keeps your problem and
-   answers when you switch topics). This file is public: generators must build new
-   problems from random parameters and never contain questions copied from course
-   quizzes or exams.
+   Every generator is a pure function of a seeded random source, so a problem can be rebuilt
+   exactly from its seed (that is how the practice page keeps your problem and answers when you
+   switch topics). Each problem type has several question styles ("variants").
+
+   Numbers are chosen so that every answer can be worked out by hand: no calculators are allowed
+   on the exams. Numeric answers are whole numbers or exact to at most two decimal places, and
+   fractions such as 7/3 are accepted wherever a number is asked for.
+
+   This file is public: generators build new problems from random parameters and must never
+   contain questions copied from course quizzes or exams.
 
    A generator returns:
      prompt   HTML shown above the answers
@@ -36,13 +41,21 @@
         a = a.slice();
         for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(r() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; }
         return a;
+      },
+      /* Draw from `make` until `ok` accepts (deterministic for a given seed). */
+      until: function (make, ok) {
+        for (var i = 0; i < 500; i++) { var v = make(); if (ok(v)) return v; }
+        throw new Error("no acceptable value");
       }
     };
   }
+  /* Pick a variant (a function of R) and run it. */
+  function variants(list) { return function (R) { return R.pick(list)(R); }; }
 
   /* ---------- formatting helpers ---------- */
   function round(x, d) { var m = Math.pow(10, d); return Math.round(x * m) / m; }
   function fmt(x, d) { return String(round(x, d === undefined ? 2 : d)); }
+  function exact(x, d) { var m = Math.pow(10, d === undefined ? 2 : d); return Math.abs(x * m - Math.round(x * m)) < 1e-9; }
   function esc(s) {
     return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; });
   }
@@ -58,12 +71,29 @@
   function hex(n, w) { var s = (n >>> 0).toString(16).toUpperCase(); while (s.length < w) s = "0" + s; return "0x" + s; }
   function p(s) { return "<p>" + s + "</p>"; }
   function ul(items) { return "<ul>" + items.map(function (i) { return "<li>" + i + "</li>"; }).join("") + "</ul>"; }
+  function sum(a) { return a.reduce(function (s, x) { return s + x; }, 0); }
+  function maxOf(a) { return Math.max.apply(null, a); }
   function percentSplit(R, k, step) {
     var parts = [], i;
     for (i = 0; i < k; i++) parts.push(1);
     for (var left = 100 / step - k; left > 0; left--) parts[R.int(0, k - 1)]++;
     return parts.map(function (u) { return u * step; });
   }
+
+  /* ---------- field shorthands ---------- */
+  function num(id, label, answer, opts) {
+    var f = { id: id, label: label, kind: "number", answer: answer, tol: 0 };
+    for (var k in opts || {}) f[k] = opts[k];
+    if (!exact(answer, 2) && !f.tol && !f.rel) f.tol = 0.005;
+    return f;
+  }
+  function choice(id, label, options, answer, opts) {
+    var f = { id: id, label: label, kind: "choice", options: options, answer: answer };
+    for (var k in opts || {}) f[k] = opts[k];
+    return f;
+  }
+  function bit(id, answer) { return { id: id, label: "", kind: "bits", width: 1, answer: String(answer), size: 2 }; }
+  var YN = ["yes", "no"];
 
   /* ---------- MIPS tables ---------- */
   var REGS = ["$zero", "$at", "$v0", "$v1", "$a0", "$a1", "$a2", "$a3",
@@ -79,14 +109,15 @@
     lw: { fmt: "M", op: 0x23 }, sw: { fmt: "M", op: 0x2b }
   };
   var MNEMONICS = Object.keys(MIPS);
+  var OPCODE_NOTE = "Opcodes: R-type 0, addi 8, andi 12, ori 13, lw 35, sw 43. Funct: add 32, sub 34, and 36, or 37, slt 42, sll 0, srl 2.";
 
   function randomInstr(R) {
     var m = R.pick(MNEMONICS), f = MIPS[m], i = { m: m };
     var reg = function () { return R.pick(USER_REGS); };
     if (f.fmt === "R3") { i.rd = reg(); i.rs = reg(); i.rt = reg(); i.shamt = 0; }
-    else if (f.fmt === "SH") { i.rd = reg(); i.rs = 0; i.rt = reg(); i.shamt = R.int(1, 31); }
-    else if (f.fmt === "I") { i.rt = reg(); i.rs = reg(); i.imm = f.signed ? R.int(-200, 200) : R.int(0, 0xff); }
-    else { i.rt = reg(); i.rs = R.pick([16, 17, 18, 19, 29, 4, 5]); i.imm = 4 * R.int(-8, 16); }
+    else if (f.fmt === "SH") { i.rd = reg(); i.rs = 0; i.rt = reg(); i.shamt = R.int(1, 8); }
+    else if (f.fmt === "I") { i.rt = reg(); i.rs = reg(); i.imm = f.signed ? R.int(-20, 40) : R.int(1, 63); }
+    else { i.rt = reg(); i.rs = R.pick([16, 17, 18, 19, 29, 4, 5]); i.imm = 4 * R.int(-4, 8); }
     return i;
   }
   function asm(i) {
@@ -117,7 +148,7 @@
     ]);
   }
 
-  /* ---------- Boolean expressions (parser shared with the checker) ---------- */
+  /* ---------- Boolean expressions ---------- */
   function parseBool(src, vars) {
     var s = src.replace(/[·*&∧]/g, "*").replace(/[∨|]/g, "+").replace(/[¬!~]/g, "!").replace(/[’′]/g, "'");
     var pos = 0, literals = 0;
@@ -143,12 +174,12 @@
       if (c === "(") { pos++; node = expr(); if (peek() !== ")") throw new Error("missing )"); pos++; }
       else if (c === "0" || c === "1") { pos++; node = { op: "const", v: c === "1" }; }
       else if (c !== undefined && vars.indexOf(c) !== -1) { pos++; literals++; node = { op: "var", v: c }; }
-      else throw new Error("unexpected " + (c === undefined ? "end" : c));
+      else throw new Error("unexpected " + (c === undefined ? "end" : "“" + c + "”"));
       while (peek() === "'") { pos++; node = { op: "not", a: node }; }
       return node;
     }
     var tree = expr();
-    if (peek() !== undefined) throw new Error("unexpected " + peek());
+    if (peek() !== undefined) throw new Error("unexpected “" + peek() + "”");
     return { tree: tree, literals: literals };
   }
   function evalBool(n, env) {
@@ -169,7 +200,7 @@
     }
     return out;
   }
-  /* Rename and optionally complement variables in an expression string (single-letter vars). */
+  function ttOf(expr, vars) { return truthTable(parseBool(expr, vars).tree, vars); }
   function remapExpr(src, map) {
     var out = "";
     for (var i = 0; i < src.length; i++) {
@@ -191,18 +222,55 @@
   function mintermText(m, vars) {
     return vars.map(function (v, k) { return v + (((m >> (vars.length - 1 - k)) & 1) ? "" : "'"); }).join("");
   }
+  /* Minimum sum of products by brute force (fine for up to 4 variables). */
+  function minSop(tt, vars) {
+    var n = vars.length, ones = minterms(tt);
+    if (!ones.length) return { expr: "0", literals: 0 };
+    if (ones.length === tt.length) return { expr: "1", literals: 0 };
+    var cubes = [];
+    for (var c = 0; c < Math.pow(3, n); c++) {
+      var spec = [], x = c;
+      for (var k = 0; k < n; k++) { spec.push(x % 3); x = Math.floor(x / 3); }
+      var cover = [];
+      for (var m = 0; m < tt.length; m++) {
+        var ok = true;
+        for (k = 0; k < n; k++) {
+          var b = (m >> (n - 1 - k)) & 1;
+          if (spec[k] !== 2 && spec[k] !== b) { ok = false; break; }
+        }
+        if (ok) cover.push(m);
+      }
+      if (cover.every(function (m2) { return tt[m2]; })) cubes.push({ spec: spec, cover: cover, lits: spec.filter(function (s2) { return s2 !== 2; }).length });
+    }
+    var primes = cubes.filter(function (a) {
+      return !cubes.some(function (b2) { return b2 !== a && b2.cover.length > a.cover.length && a.cover.every(function (m3) { return b2.cover.indexOf(m3) !== -1; }); });
+    });
+    var best = null;
+    for (var mask = 1; mask < (1 << primes.length); mask++) {
+      var chosen = primes.filter(function (_, i) { return mask & (1 << i); });
+      var covered = ones.every(function (m4) { return chosen.some(function (cb) { return cb.cover.indexOf(m4) !== -1; }); });
+      if (!covered) continue;
+      var lits = sum(chosen.map(function (cb) { return cb.lits; }));
+      if (!best || lits < best.lits || (lits === best.lits && chosen.length < best.terms.length)) best = { lits: lits, terms: chosen };
+    }
+    var expr = best.terms.map(function (cb) {
+      return cb.spec.map(function (s3, k2) { return s3 === 2 ? "" : vars[k2] + (s3 ? "" : "'"); }).join("");
+    }).join(" + ");
+    return { expr: expr, literals: best.lits };
+  }
 
   /* ---------- simulators (also exported for tests) ---------- */
   function simulateCache(cfg, addrs) {
-    var sets = [], steps = [];
+    var sets = [], steps = [], fifo = cfg.policy === "fifo";
     for (var s = 0; s < cfg.sets; s++) sets.push([]);
+    var seen = {};
     addrs.forEach(function (a) {
       var block = Math.floor(a / cfg.block), set = block % cfg.sets, start = block * cfg.block;
       var lines = sets[set], k = lines.indexOf(start), hit = k !== -1;
-      if (hit) lines.splice(k, 1);
-      lines.unshift(start);
-      if (lines.length > cfg.ways) lines.pop();
-      steps.push({ addr: a, set: set, start: start, hit: hit });
+      if (hit && !fifo) { lines.splice(k, 1); lines.unshift(start); }
+      if (!hit) { lines.unshift(start); if (lines.length > cfg.ways) lines.pop(); }
+      steps.push({ addr: a, set: set, start: start, hit: hit, cold: !hit && !seen[start] });
+      seen[start] = true;
     });
     return { steps: steps, sets: sets };
   }
@@ -222,25 +290,28 @@
     });
     return out;
   }
-  function simulateMesi(reqs) {
-    var st = ["-", "-", "-"], rows = [];
+  function simulateMesi(reqs, cores) {
+    cores = cores || 3;
+    var st = [], rows = [];
+    for (var c = 0; c < cores; c++) st.push("-");
     reqs.forEach(function (r) {
-      var me = r.p, others = [0, 1, 2].filter(function (q) { return q !== me; });
-      var holders = others.filter(function (q) { return st[q] === "M" || st[q] === "E" || st[q] === "S"; });
-      var mine = st[me], has = mine === "M" || mine === "E" || mine === "S", supplier, hit = has;
+      var me = r.p, others = [];
+      for (var q = 0; q < cores; q++) if (q !== me) others.push(q);
+      var holders = others.filter(function (q2) { return st[q2] === "M" || st[q2] === "E" || st[q2] === "S"; });
+      var mine = st[me], has = mine === "M" || mine === "E" || mine === "S", supplier;
       if (has) supplier = "-";
       else if (!holders.length) supplier = "Memory";
-      else supplier = holders.map(function (q) { return "P" + (q + 1); }).join(" or ");
+      else supplier = holders.map(function (q3) { return "P" + (q3 + 1); }).join(" or ");
       if (r.op === "R") {
         if (!has) {
           if (!holders.length) st[me] = "E";
-          else { st[me] = "S"; holders.forEach(function (q) { st[q] = "S"; }); }
+          else { st[me] = "S"; holders.forEach(function (q4) { st[q4] = "S"; }); }
         }
       } else {
         st[me] = "M";
-        holders.forEach(function (q) { st[q] = "I"; });
+        holders.forEach(function (q5) { st[q5] = "I"; });
       }
-      rows.push({ req: r, states: st.slice(), supplier: supplier, hit: hit });
+      rows.push({ req: r, states: st.slice(), supplier: supplier, hit: has });
     });
     return rows;
   }
@@ -260,7 +331,6 @@
     });
     return out;
   }
-  /* Dependencies between instructions given as { dst: reg|null, src: [regs] }. */
   function findDependencies(ins) {
     var deps = [];
     for (var j = 0; j < ins.length; j++) {
@@ -275,8 +345,8 @@
     deps.sort(function (a, b) { return a.from - b.from || a.to - b.to; });
     return deps;
   }
-  /* Classic 5-stage pipeline. D = cycle the instruction is in ID. Register file writes in the
-     first half of a cycle and reads in the second half. Forwarding feeds EX only. */
+  /* Classic 5-stage pipeline. D = cycle the instruction is in ID. Registers are written in the first
+     half of a cycle and read in the second half. Forwarding feeds EX only. */
   function pipelineStalls(ins, forwarding) {
     var D = [], lastWriter = {};
     for (var i = 0; i < ins.length; i++) {
@@ -290,10 +360,11 @@
       D.push(d);
       if (ins[i].dst) lastWriter[ins[i].dst] = i;
     }
-    var stalls = D[D.length - 1] - (1 + ins.length - 1);
+    var stalls = D[D.length - 1] - ins.length;
     return { stalls: stalls, cycles: 5 + ins.length - 1 + stalls, D: D };
   }
-  function minSchedule(preds, width) {
+  /* Minimum issue cycles. slots: { any: W } or { alu: 1, mem: 1 }; types[i] is "alu" or "mem". */
+  function minSchedule(preds, slots, types) {
     var n = preds.length, full = (1 << n) - 1, dist = {}, queue = [0];
     dist[0] = 0;
     while (queue.length) {
@@ -304,10 +375,16 @@
         if (s & (1 << i)) continue;
         if (preds[i].every(function (q) { return s & (1 << q); })) ready.push(i);
       }
-      var k = Math.min(width, ready.length);
-      combos(ready, k).forEach(function (c) {
-        var t = s; c.forEach(function (i) { t |= 1 << i; });
-        if (dist[t] === undefined) { dist[t] = dist[s] + 1; queue.push(t); }
+      var picks;
+      if (slots.any) picks = combos(ready, Math.min(slots.any, ready.length));
+      else {
+        var alu = ready.filter(function (i2) { return types[i2] === "alu"; }), mem = ready.filter(function (i3) { return types[i3] === "mem"; });
+        picks = [];
+        (alu.length ? alu : [null]).forEach(function (a) { (mem.length ? mem : [null]).forEach(function (m) { picks.push([a, m].filter(function (x) { return x !== null; })); }); });
+      }
+      picks.forEach(function (c) {
+        var t = s; c.forEach(function (i4) { t |= 1 << i4; });
+        if (t !== s && dist[t] === undefined) { dist[t] = dist[s] + 1; queue.push(t); }
       });
     }
     return Infinity;
@@ -321,433 +398,826 @@
   function criticalPath(preds) {
     var depth = [];
     preds.forEach(function (ps, i) { depth[i] = 1 + ps.reduce(function (m, q) { return Math.max(m, depth[q]); }, 0); });
-    return Math.max.apply(null, depth);
+    return maxOf(depth);
   }
 
-  /* ---------- field shorthands ---------- */
-  function num(id, label, answer, opts) {
-    var f = { id: id, label: label, kind: "number", answer: answer, tol: 0 };
-    for (var k in opts || {}) f[k] = opts[k];
-    return f;
+  /* Present a multiple-choice question bank: pick n questions, shuffle their options. */
+  function quiz(R, bank, n, intro) {
+    var qs = R.shuffle(bank).slice(0, n), fields = [], sol = [];
+    qs.forEach(function (q, k) {
+      var opts = R.shuffle(q.o.slice());
+      fields.push(choice("q" + k, (k + 1) + ". " + q.q, opts, q.o[0], { wide: true }));
+      sol.push("<strong>" + (k + 1) + ". " + esc(q.o[0]) + "</strong> — " + q.why);
+    });
+    return { prompt: p(intro || "Choose the best answer for each question."), fields: fields, solution: ul(sol), layout: "stack" };
   }
-  function choice(id, label, options, answer, opts) {
-    var f = { id: id, label: label, kind: "choice", options: options, answer: answer };
-    for (var k in opts || {}) f[k] = opts[k];
-    return f;
-  }
-  function bit(id, answer) { return { id: id, label: "", kind: "bits", width: 1, answer: String(answer), size: 2 }; }
 
   /* =====================================================================
      Generators, keyed "topic/problem"
      ===================================================================== */
   var G = {};
+  var CLASSES = ["ALU", "Load", "Store", "Branch"];
 
   /* ----- 1. Performance ----- */
-  G["performance/effective-cpi"] = function (R) {
-    var classes = ["ALU", "Load", "Store", "Branch"], freq = percentSplit(R, 4, 5);
-    var cpi = classes.map(function () { return R.int(1, 6); });
-    var total = 0, terms = [];
-    classes.forEach(function (c, i) { total += freq[i] / 100 * cpi[i]; terms.push(cpi[i] + " × " + fmt(freq[i] / 100)); });
-    return {
-      prompt: p("A program runs on a processor with the instruction mix below.") +
-        table(["Class", "Frequency", "CPI"], classes.map(function (c, i) { return [c, freq[i] + "%", cpi[i]]; })) +
-        p("What is the effective CPI of the program? Give your answer to two decimal places."),
-      fields: [num("cpi", "Effective CPI", round(total, 2), { tol: 0.005 })],
-      solution: p("Effective CPI is the frequency-weighted average of the CPIs:") +
-        p("CPI = " + terms.join(" + ") + " = <strong>" + fmt(total) + "</strong>")
-    };
-  };
+  function mixTable(R) {
+    var freq = percentSplit(R, 4, 10), cpi = CLASSES.map(function () { return R.int(1, 5); });
+    return { freq: freq, cpi: cpi, eff: sum(freq.map(function (f, i) { return f / 100 * cpi[i]; })) };
+  }
+  function mixRows(m, hide) {
+    return CLASSES.map(function (c, i) { return [c, m.freq[i] + "%", hide === i ? "?" : m.cpi[i]]; });
+  }
+  function cpiTerms(m) { return m.cpi.map(function (c, i) { return c + " × " + fmt(m.freq[i] / 100, 1); }).join(" + "); }
 
-  G["performance/cpu-time"] = function (R) {
-    var ic = R.int(10, 90) * 10, cpi = R.int(8, 30) / 10, ghz = R.pick([1, 1.5, 2, 2.5, 3, 3.5, 4]);
-    var ms = ic * cpi / ghz;
-    if (R.chance(0.5)) {
+  G["performance/effective-cpi"] = variants([
+    function (R) {
+      var m = mixTable(R);
       return {
-        prompt: p("A program executes " + ic + " million instructions with an average CPI of " + cpi +
-          " on a " + ghz + " GHz processor.") + p("What is the CPU time of the program, in milliseconds?"),
-        fields: [num("t", "CPU time", round(ms, 2), { rel: 0.005, suffix: "ms" })],
-        solution: p("CPU time = instruction count × CPI ÷ clock rate") +
-          p("= " + ic + " × 10⁶ × " + cpi + " ÷ (" + ghz + " × 10⁹ Hz) = <strong>" + fmt(ms) + " ms</strong>")
+        prompt: p("A program runs on a processor with the instruction mix below. What is the effective CPI?") + table(["Class", "Frequency", "CPI"], mixRows(m)),
+        fields: [num("cpi", "Effective CPI", round(m.eff, 2))],
+        solution: p("Effective CPI = Σ CPI × frequency = " + cpiTerms(m) + " = <strong>" + fmt(m.eff) + "</strong>")
+      };
+    },
+    function (R) {
+      var m = mixTable(R), k = R.int(0, 3);
+      var known = sum(m.freq.map(function (f, i) { return i === k ? 0 : f / 100 * m.cpi[i]; }));
+      return {
+        prompt: p("The effective CPI of a program is " + fmt(m.eff) + ". One CPI is missing from the table. What is it?") + table(["Class", "Frequency", "CPI"], mixRows(m, k)),
+        fields: [num("c", CLASSES[k] + " CPI", m.cpi[k])],
+        solution: p("The known classes contribute " + fmt(known) + " cycles per instruction, so " + fmt(m.freq[k] / 100, 1) + " × CPI = " + fmt(m.eff) + " − " + fmt(known) + " = " + fmt(m.eff - known) + ".") +
+          p(CLASSES[k] + " CPI = " + fmt(m.eff - known) + " ÷ " + fmt(m.freq[k] / 100, 1) + " = <strong>" + m.cpi[k] + "</strong>")
+      };
+    },
+    function (R) {
+      var m = mixTable(R), total = R.pick([1000, 2000, 5000, 10000]);
+      var counts = m.freq.map(function (f) { return f / 100 * total; }), cycles = sum(counts.map(function (c, i) { return c * m.cpi[i]; }));
+      return {
+        prompt: p("A program executes the instructions below. How many clock cycles does it take, and what is its effective CPI?") +
+          table(["Class", "Instructions", "CPI"], CLASSES.map(function (c, i) { return [c, counts[i], m.cpi[i]]; })),
+        fields: [num("cy", "Total cycles", cycles), num("cpi", "Effective CPI", round(cycles / total, 2))],
+        solution: p("Cycles = " + counts.map(function (c, i) { return c + " × " + m.cpi[i]; }).join(" + ") + " = <strong>" + cycles + "</strong>") +
+          p("CPI = cycles ÷ instructions = " + cycles + " ÷ " + total + " = <strong>" + fmt(cycles / total) + "</strong>")
+      };
+    },
+    function (R) {
+      var m, newCpi, desc;
+      R.until(function () {
+        m = mixTable(R);
+        newCpi = m.cpi.slice();
+        var opts = [
+          function () { if (m.cpi[1] % 2) return false; newCpi[1] = m.cpi[1] / 2; return "loads run twice as fast (the Load CPI halves)"; },
+          function () { var v = m.cpi[3] + R.int(1, 2); newCpi[3] = v; return "branches now take " + v + " cycles"; },
+          function () { if (m.cpi[2] < 2) return false; newCpi[2] = m.cpi[2] - 1; return "stores take one cycle less"; },
+          function () { newCpi[0] = m.cpi[0] * 2; return "ALU instructions take twice as many cycles"; }
+        ];
+        desc = R.shuffle([0, 1, 2, 3]).slice(0, 2).map(function (i) { return opts[i](); });
+        return true;
+      }, function () { return desc.every(Boolean); });
+      var eff2 = sum(m.freq.map(function (f, i) { return f / 100 * newCpi[i]; }));
+      var verdict = eff2 < m.eff - 1e-9 ? "faster" : eff2 > m.eff + 1e-9 ? "slower" : "the same";
+      return {
+        prompt: p("A program has the instruction mix below. A new processor design changes two things: " + desc.join(", and ") + ". The clock rate is unchanged.") +
+          table(["Class", "Frequency", "CPI"], mixRows(m)) + p("What is the new effective CPI, and is the program faster or slower?"),
+        fields: [num("cpi", "New effective CPI", round(eff2, 2)), choice("v", "The program is", ["faster", "slower", "the same"], verdict)],
+        solution: p("Old CPI = " + cpiTerms(m) + " = " + fmt(m.eff) + ".") +
+          p("New CPIs: " + CLASSES.map(function (c, i) { return c + " " + newCpi[i]; }).join(", ") + ". New CPI = " +
+            newCpi.map(function (c, i) { return c + " × " + fmt(m.freq[i] / 100, 1); }).join(" + ") + " = <strong>" + fmt(eff2) + "</strong>, so the program is <strong>" + verdict + "</strong>.")
+      };
+    },
+    function (R) {
+      var m, a, b, ia, ib, gainA, gainB;
+      R.until(function () {
+        m = mixTable(R); ia = R.int(0, 3); ib = R.int(0, 3); a = R.int(1, 2); b = R.int(1, 3);
+        gainA = m.freq[ia] / 100 * a; gainB = m.freq[ib] / 100 * b;
+        return true;
+      }, function () { return ia !== ib && m.cpi[ia] > a && m.cpi[ib] > b && Math.abs(gainA - gainB) > 0.05; });
+      var best = gainA > gainB ? "A" : "B", newEff = m.eff - Math.max(gainA, gainB);
+      return {
+        prompt: p("A program has the instruction mix below. You can afford one improvement:") + table(["Class", "Frequency", "CPI"], mixRows(m)) +
+          ul(["<strong>A</strong>: reduce the " + CLASSES[ia] + " CPI by " + a, "<strong>B</strong>: reduce the " + CLASSES[ib] + " CPI by " + b]) +
+          p("Which improvement gives the lower effective CPI, and what is that CPI?"),
+        fields: [choice("w", "Better improvement", ["A", "B"], best), num("cpi", "Resulting CPI", round(newEff, 2))],
+        solution: p("Each improvement saves (frequency × cycles saved) cycles per instruction: A saves " + fmt(m.freq[ia] / 100, 1) + " × " + a + " = " + fmt(gainA) +
+          ", B saves " + fmt(m.freq[ib] / 100, 1) + " × " + b + " = " + fmt(gainB) + ".") +
+          p("<strong>" + best + "</strong> is better: CPI = " + fmt(m.eff) + " − " + fmt(Math.max(gainA, gainB)) + " = <strong>" + fmt(newEff) + "</strong>.")
       };
     }
-    var target = round(ms * R.pick([0.5, 0.6, 0.75, 0.8]), 1), need = ic * cpi / target;
-    return {
-      prompt: p("A program executes " + ic + " million instructions with an average CPI of " + cpi + ".") +
-        p("What clock rate (in GHz) does the processor need for the program to finish in " + target + " ms?"),
-      fields: [num("f", "Clock rate", round(need, 2), { rel: 0.005, suffix: "GHz" })],
-      solution: p("Clock rate = instruction count × CPI ÷ CPU time") +
-        p("= " + ic + " × 10⁶ × " + cpi + " ÷ (" + target + " × 10⁻³ s) = <strong>" + fmt(need) + " GHz</strong>")
-    };
-  };
+  ]);
 
-  G["performance/amdahl"] = function (R) {
-    var f = R.int(4, 18) * 5, fr = f / 100, max = 1 / (1 - fr);
-    if (R.chance(0.5)) {
-      var s = R.int(2, 20), sp = 1 / ((1 - fr) + fr / s);
+  var NICE_CPI = [1, 1.5, 2, 2.5, 3, 4];
+  G["performance/cpu-time"] = variants([
+    function (R) {
+      var v = R.until(function () { return { ic: R.pick([1, 2, 3, 4, 5, 6, 8, 10]), cpi: R.pick(NICE_CPI), f: R.pick([1, 2, 4, 5]) }; },
+        function (o) { return exact(o.ic * o.cpi / o.f, 2); });
+      var t = v.ic * v.cpi / v.f;
       return {
-        prompt: p("An enhancement makes " + f + "% of a program's execution time run " + s + " times faster.") +
-          p("What is the overall speedup? What is the largest overall speedup possible if that part were made infinitely fast?"),
-        fields: [num("sp", "Overall speedup", round(sp, 2), { tol: 0.01 }), num("max", "Maximum speedup", round(max, 2), { tol: 0.01 })],
-        solution: p("Amdahl's law: speedup = 1 ÷ ((1 − f) + f ÷ s) = 1 ÷ (" + fmt(1 - fr) + " + " + fmt(fr) + " ÷ " + s + ") = <strong>" + fmt(sp) + "</strong>") +
-          p("As s → ∞: speedup → 1 ÷ (1 − f) = 1 ÷ " + fmt(1 - fr) + " = <strong>" + fmt(max) + "</strong>")
+        prompt: p("A program executes " + v.ic + " × 10⁹ instructions with an average CPI of " + v.cpi + " on a " + v.f + " GHz processor. What is its CPU time?"),
+        fields: [num("t", "CPU time", t, { suffix: "s" })],
+        solution: p("CPU time = instructions × CPI ÷ clock rate = " + v.ic + " × 10⁹ × " + v.cpi + " ÷ (" + v.f + " × 10⁹) = <strong>" + fmt(t) + " s</strong>")
+      };
+    },
+    function (R) {
+      var v = R.until(function () { return { ic: R.pick([1, 2, 3, 4, 6, 8]), cpi: R.pick(NICE_CPI), f: R.pick([1, 1.5, 2, 2.5, 3, 4]) }; },
+        function (o) { var t = o.ic * o.cpi / o.f; return exact(t, 1) && t >= 1; });
+      var t = v.ic * v.cpi / v.f;
+      return {
+        prompt: p("A processor runs a program of " + v.ic + " × 10⁹ instructions, with an average CPI of " + v.cpi + ", in " + fmt(t) + " seconds. What is its clock rate?"),
+        fields: [num("f", "Clock rate", v.f, { suffix: "GHz" })],
+        solution: p("Clock rate = instructions × CPI ÷ time = " + v.ic + " × 10⁹ × " + v.cpi + " ÷ " + fmt(t) + " s = <strong>" + v.f + " GHz</strong>")
+      };
+    },
+    function (R) {
+      var v = R.until(function () { return { ic: R.pick([1, 2, 4, 5, 8]), cpi: R.pick(NICE_CPI), f: R.pick([1, 2, 4]) }; },
+        function (o) { return exact(o.ic * o.cpi / o.f, 2); });
+      var t = v.ic * v.cpi / v.f;
+      return {
+        prompt: p("A " + v.f + " GHz processor runs a program of " + v.ic + " × 10⁹ instructions in " + fmt(t) + " seconds. What is the average CPI?"),
+        fields: [num("c", "CPI", v.cpi)],
+        solution: p("CPI = time × clock rate ÷ instructions = " + fmt(t) + " × " + v.f + " × 10⁹ ÷ (" + v.ic + " × 10⁹) = <strong>" + v.cpi + "</strong>")
+      };
+    },
+    function (R) {
+      var v = R.until(function () { return { ic: R.pick([1, 2, 4, 5, 10]), cpi: R.pick([1, 1.5, 2, 2.5, 3]), ps: R.pick([200, 250, 400, 500]) }; },
+        function (o) { return exact(o.ic * o.cpi * o.ps / 1000, 2); });
+      var ms = v.ic * v.cpi * v.ps / 1000;
+      return {
+        prompt: p("A processor has a clock cycle time of " + v.ps + " ps. A program executes " + v.ic + " million instructions with an average CPI of " + v.cpi + ". How many clock cycles does it take, and what is its CPU time in milliseconds?"),
+        fields: [num("cy", "Clock cycles (millions)", v.ic * v.cpi), num("t", "CPU time", ms, { suffix: "ms" })],
+        solution: p("Cycles = " + v.ic + " million × " + v.cpi + " = <strong>" + fmt(v.ic * v.cpi) + " million</strong>.") +
+          p("Time = cycles × cycle time = " + fmt(v.ic * v.cpi) + " × 10⁶ × " + v.ps + " × 10⁻¹² s = <strong>" + fmt(ms) + " ms</strong>")
+      };
+    },
+    function (R) {
+      var v = R.until(function () { return { t: R.pick([10, 12, 15, 20, 30, 40, 60]), pIC: R.pick([50, 60, 75, 80, 90]), m: R.pick([1.1, 1.2, 1.25, 1.5, 2]) }; },
+        function (o) { var t2 = o.t * o.pIC / 100 * o.m; return exact(t2, 2) && Math.abs(t2 - o.t) > 0.01; });
+      var t2 = v.t * v.pIC / 100 * v.m, verdict = t2 < v.t ? "faster" : "slower";
+      return {
+        prompt: p("A program runs in " + v.t + " seconds. A new compiler generates only " + v.pIC + "% as many instructions, but the average CPI of the new code is " + v.m + " times higher. The clock rate is unchanged.") +
+          p("How long does the program take now? Is it faster or slower?"),
+        fields: [num("t", "New time", t2, { suffix: "s" }), choice("v", "The program is", ["faster", "slower"], verdict)],
+        solution: p("Time is proportional to instructions × CPI, so new time = " + v.t + " × " + fmt(v.pIC / 100) + " × " + v.m + " = <strong>" + fmt(t2) + " s</strong>, which is <strong>" + verdict + "</strong>.")
+      };
+    },
+    function (R) {
+      var v = R.until(function () { return { f: R.pick([1, 2, 3, 4]), cpi: R.pick([0.5, 1, 1.25, 1.5, 2, 2.5, 4]) }; },
+        function (o) { return exact(o.f * 1000 / o.cpi, 0); });
+      var mips = v.f * 1000 / v.cpi;
+      return {
+        prompt: p("A " + v.f + " GHz processor has an average CPI of " + v.cpi + ". What is its MIPS rating (millions of instructions per second)?"),
+        fields: [num("m", "MIPS", mips)],
+        solution: p("MIPS = clock rate ÷ (CPI × 10⁶) = " + v.f + " × 10⁹ ÷ (" + v.cpi + " × 10⁶) = <strong>" + mips + "</strong>")
       };
     }
-    var goal = round(1.1 + R.f() * (0.8 * max - 1.1), 1);
-    if (goal <= 1.1) goal = 1.2;
-    var need = fr / (1 / goal - (1 - fr));
-    return {
-      prompt: p(f + "% of a program's execution time can be sped up.") +
-        p("By what factor must that part be sped up to make the whole program " + goal + " times faster? What is the largest overall speedup possible?"),
-      fields: [num("s", "Required factor", round(need, 2), { rel: 0.01 }), num("max", "Maximum speedup", round(max, 2), { tol: 0.01 })],
-      solution: p("Solve " + goal + " = 1 ÷ ((1 − " + fmt(fr) + ") + " + fmt(fr) + " ÷ s) for s:") +
-        p("s = f ÷ (1 ÷ " + goal + " − (1 − f)) = " + fmt(fr) + " ÷ (" + fmt(1 / goal, 4) + " − " + fmt(1 - fr) + ") = <strong>" + fmt(need) + "</strong>") +
-        p("Maximum speedup = 1 ÷ (1 − f) = <strong>" + fmt(max) + "</strong>")
-    };
-  };
+  ]);
 
-  G["performance/compare"] = function (R) {
-    var r1, r2, c1, c2, t1, t2, tries = 0;
-    do {
-      r1 = R.pick([1, 1.5, 2, 2.5, 3, 3.5, 4]); r2 = R.pick([1, 1.5, 2, 2.5, 3, 3.5, 4]);
-      c1 = R.int(10, 40) / 10; c2 = R.int(10, 40) / 10;
-      t1 = c1 / r1; t2 = c2 / r2;
-    } while (Math.abs(t1 / t2 - 1) < 0.05 && ++tries < 50);
-    var faster = t1 < t2 ? "P1" : "P2", sp = Math.max(t1, t2) / Math.min(t1, t2);
-    return {
-      prompt: p("Two processors implement the same instruction set and run the same program.") +
-        table(["Processor", "Clock rate", "CPI"], [["P1", r1 + " GHz", c1], ["P2", r2 + " GHz", c2]]) +
-        p("Which processor is faster, and by what factor?"),
-      fields: [choice("faster", "Faster processor", ["P1", "P2"], faster), num("sp", "Speedup", round(sp, 2), { tol: 0.01 })],
-      solution: p("With the same instruction count, time per instruction = CPI ÷ clock rate:") +
-        ul(["P1: " + c1 + " ÷ " + r1 + " = " + fmt(t1, 3) + " ns", "P2: " + c2 + " ÷ " + r2 + " = " + fmt(t2, 3) + " ns"]) +
-        p("<strong>" + faster + "</strong> is faster by " + fmt(Math.max(t1, t2), 3) + " ÷ " + fmt(Math.min(t1, t2), 3) + " = <strong>" + fmt(sp) + "</strong>")
-    };
+  /* (f, s) pairs whose Amdahl speedup is exact to two decimals */
+  var AMDAHL = [];
+  [20, 25, 40, 50, 60, 75, 80, 90].forEach(function (f) {
+    [2, 3, 4, 5, 8, 10, 16, 20].forEach(function (s) {
+      var sp = 1 / ((1 - f / 100) + f / 100 / s);
+      if (exact(sp, 2) && sp > 1.05) AMDAHL.push({ f: f, s: s, sp: round(sp, 2) });
+    });
+  });
+  G["performance/amdahl"] = variants([
+    function (R) {
+      var c = R.pick(AMDAHL), fr = c.f / 100;
+      return {
+        prompt: p("An improvement makes " + c.f + "% of a program's execution time run " + c.s + " times faster. What is the overall speedup?"),
+        fields: [num("sp", "Overall speedup", c.sp)],
+        solution: p("Speedup = 1 ÷ ((1 − f) + f ÷ s) = 1 ÷ (" + fmt(1 - fr) + " + " + fmt(fr) + " ÷ " + c.s + ") = 1 ÷ " + fmt((1 - fr) + fr / c.s, 4) + " = <strong>" + fmt(c.sp) + "</strong>")
+      };
+    },
+    function (R) {
+      var f = R.pick([50, 75, 80, 90, 95, 60]), max = 1 / (1 - f / 100);
+      return {
+        prompt: p(f + "% of a program's execution time can be sped up; the rest cannot. What is the largest overall speedup possible, no matter how much the " + f + "% is improved?"),
+        fields: [num("m", "Maximum speedup", round(max, 2))],
+        solution: p("As the improved part's time shrinks to 0, speedup → 1 ÷ (1 − f) = 1 ÷ " + fmt(1 - f / 100) + " = <strong>" + fmt(max) + "</strong>")
+      };
+    },
+    function (R) {
+      var c = R.pick(AMDAHL);
+      return {
+        prompt: p(c.f + "% of a program's execution time can be sped up. By what factor must that part be sped up to make the whole program " + fmt(c.sp) + " times faster?"),
+        fields: [num("s", "Required factor", c.s)],
+        solution: p("Solve " + fmt(c.sp) + " = 1 ÷ ((1 − f) + f ÷ s): (1 − f) + f ÷ s = 1 ÷ " + fmt(c.sp) + " = " + fmt(1 / c.sp, 4) + ", so f ÷ s = " + fmt(1 / c.sp - (1 - c.f / 100), 4) + " and s = " + fmt(c.f / 100) + " ÷ " + fmt(1 / c.sp - (1 - c.f / 100), 4) + " = <strong>" + c.s + "</strong>")
+      };
+    },
+    function (R) {
+      var c = R.pick(AMDAHL.filter(function (x) { return [2, 4, 8, 16].indexOf(x.s) !== -1; }));
+      return {
+        prompt: p("A program spends " + c.f + "% of its time in code that can be split perfectly across cores; the rest runs on one core. What is the speedup on " + c.s + " cores?"),
+        fields: [num("sp", "Speedup", c.sp)],
+        solution: p("Amdahl's law with s = " + c.s + " cores: 1 ÷ (" + fmt(1 - c.f / 100) + " + " + fmt(c.f / 100) + " ÷ " + c.s + ") = <strong>" + fmt(c.sp) + "</strong>")
+      };
+    },
+    function (R) {
+      var c = R.pick(AMDAHL.filter(function (x) { return [2, 4, 5, 10].indexOf(x.s) !== -1; }));
+      return {
+        prompt: p("Running on " + c.s + " cores makes a program " + fmt(c.sp) + " times faster. Assuming the parallel part speeds up perfectly, what percentage of the original execution time was parallelizable?"),
+        fields: [num("f", "Parallel fraction", c.f, { suffix: "%" })],
+        solution: p("1 ÷ " + fmt(c.sp) + " = (1 − f) + f ÷ " + c.s + ", so " + fmt(1 / c.sp, 4) + " = 1 − f × (1 − 1/" + c.s + "), giving f = " + fmt(1 - 1 / c.sp, 4) + " ÷ " + fmt(1 - 1 / c.s, 4) + " = <strong>" + c.f + "%</strong>")
+      };
+    }
+  ]);
+
+  G["performance/compare"] = variants([
+    function (R) {
+      var o = R.until(function () { return { r1: R.pick([1, 2, 2.5, 4, 5]), r2: R.pick([1, 2, 2.5, 4, 5]), c1: R.pick(NICE_CPI), c2: R.pick(NICE_CPI) }; },
+        function (x) { var a = x.c1 / x.r1, b = x.c2 / x.r2, r = Math.max(a, b) / Math.min(a, b); return r > 1.01 && exact(r, 2); });
+      var t1 = o.c1 / o.r1, t2 = o.c2 / o.r2, faster = t1 < t2 ? "P1" : "P2", sp = Math.max(t1, t2) / Math.min(t1, t2);
+      return {
+        prompt: p("Two processors implement the same instruction set and run the same program.") + table(["Processor", "Clock rate", "CPI"], [["P1", o.r1 + " GHz", o.c1], ["P2", o.r2 + " GHz", o.c2]]) +
+          p("Which one is faster, and by what factor?"),
+        fields: [choice("w", "Faster processor", ["P1", "P2"], faster), num("sp", "Speedup", round(sp, 2))],
+        solution: p("Time per instruction = CPI ÷ clock rate: P1 " + o.c1 + " ÷ " + o.r1 + " = " + fmt(t1, 3) + " ns, P2 " + o.c2 + " ÷ " + o.r2 + " = " + fmt(t2, 3) + " ns.") +
+          p("<strong>" + faster + "</strong> is faster by " + fmt(Math.max(t1, t2), 3) + " ÷ " + fmt(Math.min(t1, t2), 3) + " = <strong>" + fmt(sp) + "</strong>")
+      };
+    },
+    function (R) {
+      var o = R.until(function () { return { i1: R.pick([2, 3, 4, 5, 6]), i2: R.pick([2, 3, 4, 5, 6]), c1: R.pick([1, 1.5, 2, 3]), c2: R.pick([1, 1.5, 2, 3]), f: R.pick([1, 2]) }; },
+        function (x) { var a = x.i1 * x.c1, b = x.i2 * x.c2, r = Math.max(a, b) / Math.min(a, b); return r > 1.01 && exact(r, 2) && x.i1 !== x.i2; });
+      var t1 = o.i1 * o.c1 / o.f, t2 = o.i2 * o.c2 / o.f, faster = t1 < t2 ? "Compiler A" : "Compiler B", sp = Math.max(t1, t2) / Math.min(t1, t2);
+      return {
+        prompt: p("Two compilers produce different code for the same program, run on the same " + o.f + " GHz processor.") +
+          table(["", "Instructions", "CPI"], [["Compiler A", o.i1 + " × 10⁹", o.c1], ["Compiler B", o.i2 + " × 10⁹", o.c2]]) + p("Which compiler's code runs faster, and by what factor?"),
+        fields: [choice("w", "Faster code", ["Compiler A", "Compiler B"], faster), num("sp", "Speedup", round(sp, 2))],
+        solution: p("Times: A " + o.i1 + " × " + o.c1 + " ÷ " + o.f + " = " + fmt(t1) + " s; B " + o.i2 + " × " + o.c2 + " ÷ " + o.f + " = " + fmt(t2) + " s.") +
+          p("<strong>" + faster + "</strong> is faster by <strong>" + fmt(sp) + "</strong>.")
+      };
+    },
+    function (R) {
+      var o = R.until(function () { return { r1: R.pick([1, 2, 3, 4]), c1: R.pick(NICE_CPI), c2: R.pick(NICE_CPI) }; },
+        function (x) { var r2 = x.r1 * x.c2 / x.c1; return x.c1 !== x.c2 && exact(r2, 2); });
+      var r2 = o.r1 * o.c2 / o.c1;
+      return {
+        prompt: p("Processor P1 runs at " + o.r1 + " GHz with a CPI of " + o.c1 + ". Processor P2 runs the same program with a CPI of " + o.c2 + ". What clock rate does P2 need to match P1's execution time?"),
+        fields: [num("f", "P2 clock rate", r2, { suffix: "GHz" })],
+        solution: p("Equal times need CPI₁ ÷ f₁ = CPI₂ ÷ f₂, so f₂ = f₁ × CPI₂ ÷ CPI₁ = " + o.r1 + " × " + o.c2 + " ÷ " + o.c1 + " = <strong>" + fmt(r2) + " GHz</strong>")
+      };
+    },
+    function (R) {
+      var o = R.until(function () {
+        var fr = percentSplit(R, 3, 10);
+        return { fr: fr, a: [R.int(1, 4), R.int(1, 4), R.int(1, 4)], b: [R.int(1, 4), R.int(1, 4), R.int(1, 4)], fa: R.pick([1, 2, 4]), fb: R.pick([1, 2, 4]) };
+      }, function (x) {
+        var ca = sum(x.fr.map(function (f, i) { return f / 100 * x.a[i]; })), cb = sum(x.fr.map(function (f, i) { return f / 100 * x.b[i]; }));
+        return Math.abs(ca / x.fa - cb / x.fb) > 0.01;
+      });
+      var names = ["ALU", "Load/Store", "Branch"];
+      var ca = sum(o.fr.map(function (f, i) { return f / 100 * o.a[i]; })), cb = sum(o.fr.map(function (f, i) { return f / 100 * o.b[i]; }));
+      var ta = ca / o.fa, tb = cb / o.fb, faster = ta < tb ? "P1" : "P2";
+      return {
+        prompt: p("A program's instruction mix and the CPI of each class on two processors are below.") +
+          table(["Class", "Frequency", "CPI on P1 (" + o.fa + " GHz)", "CPI on P2 (" + o.fb + " GHz)"], names.map(function (n, i) { return [n, o.fr[i] + "%", o.a[i], o.b[i]]; })) +
+          p("Give each processor's effective CPI, and say which runs the program faster."),
+        fields: [num("a", "P1 CPI", round(ca, 2)), num("b", "P2 CPI", round(cb, 2)), choice("w", "Faster processor", ["P1", "P2"], faster)],
+        solution: p("P1 CPI = " + o.a.map(function (c, i) { return c + " × " + fmt(o.fr[i] / 100, 1); }).join(" + ") + " = <strong>" + fmt(ca) + "</strong>; time per instruction " + fmt(ca) + " ÷ " + o.fa + " = " + fmt(ta, 3) + " ns.") +
+          p("P2 CPI = " + o.b.map(function (c, i) { return c + " × " + fmt(o.fr[i] / 100, 1); }).join(" + ") + " = <strong>" + fmt(cb) + "</strong>; time per instruction " + fmt(cb) + " ÷ " + o.fb + " = " + fmt(tb, 3) + " ns.") +
+          p("<strong>" + faster + "</strong> is faster.")
+      };
+    }
+  ]);
+
+  G["performance/concepts"] = function (R) {
+    return quiz(R, [
+      { q: "Which of these is NOT part of the classic CPU time equation?", o: ["Cache capacity", "Instruction count", "CPI", "Clock cycle time"], why: "CPU time = instruction count × CPI × clock cycle time; cache effects show up only indirectly, through CPI." },
+      { q: "If the clock rate doubles and nothing else changes, CPU time…", o: ["halves", "doubles", "stays the same", "drops to a quarter"], why: "Time is inversely proportional to clock rate." },
+      { q: "A compiler change lowers the instruction count but raises the CPI. The program gets faster exactly when…", o: ["instruction count × CPI decreases", "CPI decreases", "instruction count decreases", "the clock rate increases"], why: "With a fixed clock, time is proportional to the product of instruction count and CPI." },
+      { q: "Throughput measures…", o: ["work completed per unit of time", "the time to finish one task", "the clock frequency", "the number of cores"], why: "Latency is the time for one task; throughput is tasks per unit time." },
+      { q: "If 20% of a program's time cannot be improved, the overall speedup can never exceed…", o: ["5", "20", "1.25", "80"], why: "Amdahl's law: speedup ≤ 1 ÷ 0.2 = 5." },
+      { q: "Why did processor clock rates stop rising quickly in the mid-2000s?", o: ["Power and heat limits (the power wall)", "Transistors stopped shrinking", "Memory became too slow to read", "Compilers could not keep up"], why: "Dynamic power grows with clock rate, and chips could not shed the heat." },
+      { q: "Which instruction usually takes the most cycles on a simple processor?", o: ["A load that misses in the cache", "A register-to-register add", "A logical AND", "A shift"], why: "A cache miss adds many stall cycles." }
+    ], 3);
   };
 
   /* ----- 2. Memory hierarchy ----- */
-  G["memory/amat"] = function (R) {
-    if (R.chance(0.5)) {
-      var h = R.int(1, 3), m = R.int(2, 15), pen = R.int(5, 20) * 10, a = h + m / 100 * pen;
+  G["memory/amat"] = variants([
+    function (R) {
+      var o = R.until(function () { return { h: R.int(1, 2), m: R.pick([2, 4, 5, 10, 20]), pen: R.pick([20, 50, 100, 200]) }; }, function (x) { return exact(x.h + x.m / 100 * x.pen, 2); });
+      var a = o.h + o.m / 100 * o.pen;
       return {
-        prompt: p("A cache has a hit time of " + h + " cycle" + (h > 1 ? "s" : "") + ", a miss rate of " + m +
-          "% and a miss penalty of " + pen + " cycles.") + p("What is the average memory access time (AMAT), in cycles?"),
-        fields: [num("amat", "AMAT", round(a, 2), { tol: 0.01, suffix: "cycles" })],
-        solution: p("AMAT = hit time + miss rate × miss penalty = " + h + " + " + fmt(m / 100) + " × " + pen + " = <strong>" + fmt(a) + " cycles</strong>")
+        prompt: p("A cache has a hit time of " + o.h + " cycle" + (o.h > 1 ? "s" : "") + ", a miss rate of " + o.m + "% and a miss penalty of " + o.pen + " cycles. What is the AMAT?"),
+        fields: [num("a", "AMAT", round(a, 2), { suffix: "cycles" })],
+        solution: p("AMAT = hit time + miss rate × miss penalty = " + o.h + " + " + fmt(o.m / 100) + " × " + o.pen + " = <strong>" + fmt(a) + " cycles</strong>")
+      };
+    },
+    function (R) {
+      var o = R.until(function () { return { h1: 1, m1: R.pick([5, 10, 20]), h2: R.pick([10, 20]), m2: R.pick([10, 20, 25, 50]), mem: R.pick([100, 200]) }; },
+        function (x) { return exact(x.h1 + x.m1 / 100 * (x.h2 + x.m2 / 100 * x.mem), 2); });
+      var l2 = o.h2 + o.m2 / 100 * o.mem, a = o.h1 + o.m1 / 100 * l2;
+      return {
+        prompt: p("A processor has two cache levels. L1: hit time " + o.h1 + " cycle, miss rate " + o.m1 + "%. L2: hit time " + o.h2 + " cycles, local miss rate " + o.m2 + "%. Main memory takes " + o.mem + " cycles.") +
+          p("What is the L1 miss penalty, and what is the AMAT?"),
+        fields: [num("pen", "L1 miss penalty", round(l2, 2), { suffix: "cycles" }), num("a", "AMAT", round(a, 2), { suffix: "cycles" })],
+        solution: p("L1 miss penalty = L2 hit time + L2 miss rate × memory time = " + o.h2 + " + " + fmt(o.m2 / 100) + " × " + o.mem + " = <strong>" + fmt(l2) + "</strong>") +
+          p("AMAT = " + o.h1 + " + " + fmt(o.m1 / 100) + " × " + fmt(l2) + " = <strong>" + fmt(a) + " cycles</strong>")
+      };
+    },
+    function (R) {
+      var o = R.until(function () { return { h: R.int(1, 2), m: R.pick([2, 5, 10]), pen: R.pick([50, 100, 200]), ps: R.pick([250, 500, 1000]) }; },
+        function (x) { return exact((x.h + x.m / 100 * x.pen) * x.ps / 1000, 2); });
+      var cyc = o.h + o.m / 100 * o.pen, ns = cyc * o.ps / 1000;
+      return {
+        prompt: p("A processor's clock cycle is " + o.ps + " ps. Its cache has a hit time of " + o.h + " cycle" + (o.h > 1 ? "s" : "") + ", a miss rate of " + o.m + "% and a miss penalty of " + o.pen + " cycles. What is the AMAT in nanoseconds?"),
+        fields: [num("a", "AMAT", round(ns, 2), { suffix: "ns" })],
+        solution: p("AMAT = " + o.h + " + " + fmt(o.m / 100) + " × " + o.pen + " = " + fmt(cyc) + " cycles = " + fmt(cyc) + " × " + o.ps + " ps = <strong>" + fmt(ns) + " ns</strong>")
+      };
+    },
+    function (R) {
+      var o = R.until(function () { return { h: R.int(1, 2), m: R.pick([1, 2, 4, 5, 10]), pen: R.pick([50, 100, 200]) }; }, function (x) { return exact(x.h + x.m / 100 * x.pen, 2); });
+      var target = o.h + o.m / 100 * o.pen;
+      return {
+        prompt: p("A cache has a hit time of " + o.h + " cycle" + (o.h > 1 ? "s" : "") + " and a miss penalty of " + o.pen + " cycles. What miss rate gives an AMAT of " + fmt(target) + " cycles?"),
+        fields: [num("m", "Miss rate", o.m, { suffix: "%" })],
+        solution: p("Miss rate = (AMAT − hit time) ÷ miss penalty = (" + fmt(target) + " − " + o.h + ") ÷ " + o.pen + " = <strong>" + o.m + "%</strong>")
       };
     }
-    var h1 = R.int(1, 2), m1 = R.int(3, 12), h2 = R.int(6, 15), m2 = R.int(10, 40), pm = R.int(10, 30) * 10;
-    var l2 = h2 + m2 / 100 * pm, amat = h1 + m1 / 100 * l2;
-    return {
-      prompt: p("A processor has two levels of cache:") +
-        table(["", "Hit time", "Miss rate"], [["L1", h1 + " cycles", m1 + "%"], ["L2", h2 + " cycles", m2 + "% (local)"]]) +
-        p("Main memory takes " + pm + " cycles. What is the AMAT, in cycles?"),
-      fields: [num("amat", "AMAT", round(amat, 2), { tol: 0.01, suffix: "cycles" })],
-      solution: p("AMAT = L1 hit time + L1 miss rate × (L2 hit time + L2 miss rate × memory time)") +
-        p("= " + h1 + " + " + fmt(m1 / 100) + " × (" + h2 + " + " + fmt(m2 / 100) + " × " + pm + ") = " + h1 + " + " + fmt(m1 / 100) + " × " + fmt(l2) + " = <strong>" + fmt(amat) + " cycles</strong>")
-    };
-  };
+  ]);
 
-  G["memory/stall-cpi"] = function (R) {
-    var base = R.int(10, 20) / 10, mi = R.int(1, 5), md = R.int(2, 10), ls = R.int(20, 40), pen = R.int(4, 20) * 10;
-    var istall = mi / 100 * pen, dstall = ls / 100 * md / 100 * pen, cpi = base + istall + dstall;
-    return {
-      prompt: p("A processor has a base CPI of " + base + " with a perfect cache. The instruction cache miss rate is " + mi +
-        "%, the data cache miss rate is " + md + "%, and " + ls + "% of instructions are loads or stores. Every miss costs " + pen + " cycles.") +
-        p("What is the actual CPI? How many times faster would the processor be with a perfect cache?"),
-      fields: [num("cpi", "Actual CPI", round(cpi, 2), { tol: 0.01 }), num("sp", "Speedup with perfect cache", round(cpi / base, 2), { tol: 0.01 })],
-      solution: p("Instruction stalls per instruction = " + fmt(mi / 100) + " × " + pen + " = " + fmt(istall)) +
-        p("Data stalls per instruction = " + fmt(ls / 100) + " × " + fmt(md / 100) + " × " + pen + " = " + fmt(dstall, 3)) +
-        p("CPI = " + base + " + " + fmt(istall) + " + " + fmt(dstall, 3) + " = <strong>" + fmt(cpi) + "</strong>") +
-        p("Speedup = " + fmt(cpi) + " ÷ " + base + " = <strong>" + fmt(cpi / base) + "</strong>")
-    };
-  };
+  G["memory/stall-cpi"] = variants([
+    function (R) {
+      var o = R.until(function () { return { base: R.pick([1, 1.5, 2]), mi: R.pick([1, 2, 4, 5]), md: R.pick([2, 4, 5, 10]), ls: R.pick([20, 25, 40, 50]), pen: R.pick([50, 100, 200]) }; },
+        function (x) { return exact(x.base + x.mi / 100 * x.pen + x.ls / 100 * x.md / 100 * x.pen, 2); });
+      var is = o.mi / 100 * o.pen, ds = o.ls / 100 * o.md / 100 * o.pen, cpi = o.base + is + ds;
+      return {
+        prompt: p("A processor has an ideal CPI of " + o.base + ". The instruction cache misses on " + o.mi + "% of instructions, the data cache misses on " + o.md + "% of data accesses, and " + o.ls + "% of instructions are loads or stores. Each miss costs " + o.pen + " cycles.") +
+          p("What is the CPI including memory stalls?"),
+        fields: [num("c", "CPI with stalls", round(cpi, 2))],
+        solution: p("Instruction stalls = " + fmt(o.mi / 100) + " × " + o.pen + " = " + fmt(is) + "; data stalls = " + fmt(o.ls / 100) + " × " + fmt(o.md / 100) + " × " + o.pen + " = " + fmt(ds) + ".") +
+          p("CPI = " + o.base + " + " + fmt(is) + " + " + fmt(ds) + " = <strong>" + fmt(cpi) + "</strong>")
+      };
+    },
+    function (R) {
+      var o = R.until(function () { return { base: R.pick([1, 2]), stalls: R.pick([1, 2, 3, 4, 6]) }; }, function (x) { return exact((x.base + x.stalls) / x.base, 2); });
+      var cpi = o.base + o.stalls;
+      return {
+        prompt: p("With a perfect cache a program would have a CPI of " + o.base + ". Memory stalls add " + o.stalls + " cycles per instruction on average. How many times faster would the program run with a perfect cache?"),
+        fields: [num("s", "Speedup", round(cpi / o.base, 2))],
+        solution: p("Actual CPI = " + o.base + " + " + o.stalls + " = " + cpi + ". Speedup = " + cpi + " ÷ " + o.base + " = <strong>" + fmt(cpi / o.base) + "</strong>")
+      };
+    },
+    function (R) {
+      var o = R.until(function () { return { base: R.pick([1, 2]), mr: R.pick([1, 2, 4, 5]), pen: R.pick([50, 100]) }; },
+        function (x) { var a = x.base + x.mr / 100 * x.pen, b = x.base + x.mr / 100 * x.pen * 2; return exact(b, 2) && exact(a / (b / 2), 2); });
+      var a = o.base + o.mr / 100 * o.pen, b = o.base + o.mr / 100 * o.pen * 2, sp = a / (b / 2);
+      return {
+        prompt: p("A processor has an ideal CPI of " + o.base + " and " + o.mr + "% of instructions miss in the cache, each miss costing " + o.pen + " cycles. The clock rate is doubled, but memory is not faster, so a miss now costs " + 2 * o.pen + " cycles.") +
+          p("What is the new CPI, and how much faster is the new processor?"),
+        fields: [num("c", "New CPI", round(b, 2)), num("s", "Speedup", round(sp, 2))],
+        solution: p("Old CPI = " + o.base + " + " + fmt(o.mr / 100) + " × " + o.pen + " = " + fmt(a) + "; new CPI = " + o.base + " + " + fmt(o.mr / 100) + " × " + 2 * o.pen + " = <strong>" + fmt(b) + "</strong>.") +
+          p("The new cycle is half as long, so speedup = " + fmt(a) + " ÷ (" + fmt(b) + " ÷ 2) = <strong>" + fmt(sp) + "</strong> (well short of 2, because memory did not get faster).")
+      };
+    }
+  ]);
 
-  G["memory/locality"] = function (R) {
-    var s = R.pick(["sum", "total", "acc"]), gp = ["good", "poor"], lines, stride, why;
-    if (R.chance(0.6)) {
-      var M = R.pick([16, 32, 64]), N = R.pick([16, 32, 64, 128]), rowMajor = R.chance(0.5);
-      lines = ["int a[" + M + "][" + N + "];", "int " + s + " = 0;",
+  var LOC_FUNCS = [
+    { lines: ["int max = a[0];", "for (int i = 1; i < n; i++)", "    if (a[i] > max) max = a[i];"], vars: ["a", "i", "n", "max"] },
+    { lines: ["int sum = 0;", "for (int i = 0; i < n; i++)", "    sum += a[i];"], vars: ["a", "i", "n", "sum"] },
+    { lines: ["int count = 0;", "for (int i = 0; i < n; i++)", "    if (a[i] % 2 == 0) count++;"], vars: ["a", "i", "n", "count"] }
+  ];
+  G["memory/locality"] = variants([
+    function (R) {
+      var s = R.pick(["sum", "total", "acc"]), M = R.pick([16, 32, 64]), N = R.pick([16, 32, 64, 128]), rowMajor = R.chance(0.5), gp = ["good", "poor"];
+      var lines = ["int a[" + M + "][" + N + "];", "int " + s + " = 0;",
         rowMajor ? "for (int i = 0; i < " + M + "; i++)" : "for (int j = 0; j < " + N + "; j++)",
         rowMajor ? "    for (int j = 0; j < " + N + "; j++)" : "    for (int i = 0; i < " + M + "; i++)",
         "        " + s + " += a[i][j];"];
-      stride = rowMajor ? 1 : N;
-      why = rowMajor ? "The inner loop walks along a row, and rows are stored contiguously, so consecutive accesses are 1 element apart."
-        : "The inner loop walks down a column. Each row holds " + N + " ints, so consecutive accesses are " + N + " elements apart.";
-    } else {
-      var n = R.pick([256, 512, 1024]), k = R.pick([1, 1, 32, 64]);
-      lines = ["int b[" + n + "];", "int " + s + " = 0;", "for (int i = 0; i < " + n + "; i += " + k + ")", "    " + s + " += b[i];"];
-      stride = k;
-      why = "The loop variable increases by " + k + ", so consecutive accesses are " + k + " element" + (k > 1 ? "s" : "") + " apart.";
+      var stride = rowMajor ? 1 : N, good = rowMajor ? "good" : "poor";
+      return {
+        prompt: p("Consider this C code (ints are 4 bytes, cache blocks are 64 bytes, C arrays are row-major):") + pre(lines),
+        fields: [num("stride", "Stride between consecutive accesses to a (elements)", stride), choice("sp", "Spatial locality of a", gp, good),
+          choice("ta", "Temporal locality of a", gp, "poor"), choice("ts", "Temporal locality of " + s, gp, "good")],
+        solution: p(rowMajor ? "The inner loop walks along a row, which is contiguous: stride 1." : "The inner loop walks down a column; each row holds " + N + " ints, so the stride is " + N + ".") +
+          p("Spatial locality of a is <strong>" + good + "</strong>; temporal locality of a is <strong>poor</strong> (each element is used once); " + s + " has <strong>good</strong> temporal locality (used every iteration).")
+      };
+    },
+    function (R) {
+      var fn = R.pick(LOC_FUNCS), opts = ["temporal", "spatial", "both", "neither"];
+      return {
+        prompt: p("Consider this C code, where a is an int array of n elements:") + pre(fn.lines) + p("For each variable, which kind of locality do its accesses have?"),
+        fields: fn.vars.map(function (v) { return choice("v" + v, v, opts, v === "a" ? "spatial" : "temporal"); }),
+        solution: p("<strong>a</strong>: spatial — consecutive elements are read in order (stride 1), but each element is read only once, so no temporal locality.") +
+          p("<strong>" + fn.vars.slice(1).join("</strong>, <strong>") + "</strong>: temporal — each is accessed on every iteration.")
+      };
+    },
+    function (R) {
+      var colMajor = R.chance(0.6), vals = R.shuffle([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]).slice(0, 9);
+      var m = [vals.slice(0, 3), vals.slice(3, 6), vals.slice(6, 9)], order = [];
+      for (var a = 0; a < 3; a++) for (var b = 0; b < 3; b++) order.push(colMajor ? m[b][a] : m[a][b]);
+      return {
+        prompt: p("Write out how this 3 × 3 matrix is laid out in memory in a <strong>" + (colMajor ? "column" : "row") + "-major</strong> language, as a comma-separated list.") +
+          table(["", "col 0", "col 1", "col 2"], m.map(function (r, i) { return ["row " + i].concat(r); })),
+        fields: [{ id: "o", label: "Memory order", kind: "list", answer: order, size: 30 }],
+        solution: p((colMajor ? "Column-major stores each column in turn" : "Row-major stores each row in turn") + ": <strong>" + order.join(", ") + "</strong>")
+      };
+    },
+    function (R) {
+      var N = R.pick([4, 8, 10, 16]), M = R.pick([4, 8, 10]), i = R.int(1, M - 1), j = R.int(0, N - 1), base = R.pick([0x1000, 0x2000, 0x4000, 0x8000]);
+      var off = 4 * (i * N + j);
+      return {
+        prompt: p("An array " + code("int a[" + M + "][" + N + "]") + " (4-byte ints, row-major) starts at address " + code(hex(base, 4)) + ". At what byte offset from the start, and at what address, is " + code("a[" + i + "][" + j + "]") + "?"),
+        fields: [num("o", "Byte offset (decimal)", off), { id: "a", label: "Address", kind: "hex", answer: base + off, size: 10 }],
+        solution: p("Offset = 4 × (i × " + N + " + j) = 4 × (" + i + " × " + N + " + " + j + ") = <strong>" + off + "</strong> bytes; address = " + hex(base, 4) + " + " + off + " = <strong>" + hex(base + off, 4) + "</strong>")
+      };
     }
-    var arr = lines[0].indexOf("a[") !== -1 ? "a" : "b", good = stride === 1 ? "good" : "poor";
-    return {
-      prompt: p("Consider the following C code (ints are 4 bytes; cache blocks are 64 bytes).") + pre(lines) +
-        p("Answer the questions about the locality of the memory accesses."),
-      fields: [
-        num("stride", "Stride between consecutive accesses to " + arr + " (in elements)", stride),
-        choice("sp", "Spatial locality of " + arr, gp, good),
-        choice("ta", "Temporal locality of " + arr, gp, "poor"),
-        choice("ts", "Temporal locality of " + s, gp, "good")
-      ],
-      solution: p(why) +
-        p("Spatial locality of " + arr + " is <strong>" + good + "</strong>: " + (stride === 1 ? "a 64-byte block holds 16 ints, all used one after another." : "each access lands in a different cache block, so most of each block goes unused.")) +
-        p("Temporal locality of " + arr + " is <strong>poor</strong>: each element is accessed only once.") +
-        p("Temporal locality of " + s + " is <strong>good</strong>: it is accessed on every iteration.")
-    };
-  };
+  ]);
 
-  G["memory/miss-types"] = function (R) {
-    var lines = 4, seq, kinds, tries = 0;
-    do {
-      seq = [];
-      for (var i = 0; i < 8; i++) seq.push(seq.length && R.chance(0.5) ? R.pick(seq) : R.int(0, 11));
-      kinds = classifyMisses(lines, seq);
-    } while ((kinds.indexOf("conflict miss") === -1 || kinds.indexOf("hit") === -1) && ++tries < 200);
-    var opts = ["hit", "cold miss", "conflict miss", "capacity miss"];
-    var fields = kinds.map(function (k, i) { return choice("k" + i, "", opts, k); });
-    return {
-      prompt: p("A direct-mapped cache holds " + lines + " blocks (block <em>b</em> goes in line <em>b</em> mod " + lines +
-        "). It starts empty. Classify each access to the block addresses below.") +
-        p("A miss is a <em>conflict</em> miss if a fully associative LRU cache of the same size would have hit, and a <em>capacity</em> miss otherwise. The first access to a block is a <em>cold</em> miss."),
-      table: { head: ["Access", "Block", "Result"], rows: seq.map(function (b, i) { return [i + 1, b, { f: "k" + i }]; }) },
-      fields: fields,
-      solution: table(["Access", "Block", "Line", "Result"], seq.map(function (b, i) { return [i + 1, b, b % lines, "<strong>" + kinds[i] + "</strong>"]; }))
-    };
+  G["memory/miss-types"] = variants([
+    function (R) {
+      var lines = 4, seq, kinds;
+      R.until(function () {
+        seq = [];
+        for (var i = 0; i < 8; i++) seq.push(seq.length && R.chance(0.5) ? R.pick(seq) : R.int(0, 11));
+        kinds = classifyMisses(lines, seq); return true;
+      }, function () { return kinds.indexOf("conflict miss") !== -1 && kinds.indexOf("hit") !== -1; });
+      var opts = ["hit", "cold miss", "conflict miss", "capacity miss"];
+      return {
+        prompt: p("A direct-mapped cache holds 4 blocks (block b goes in line b mod 4) and starts empty. Classify each access to the block numbers below.") +
+          p("A miss is a <em>conflict</em> miss if a fully associative LRU cache of the same size would have hit, and a <em>capacity</em> miss otherwise. The first access to a block is a <em>cold</em> miss."),
+        table: { head: ["Access", "Block", "Result"], rows: seq.map(function (b, i) { return [i + 1, b, { f: "k" + i }]; }) },
+        fields: kinds.map(function (k, i) { return choice("k" + i, "", opts, k); }),
+        solution: table(["Access", "Block", "Line", "Result"], seq.map(function (b, i) { return [i + 1, b, b % lines, "<strong>" + kinds[i] + "</strong>"]; }))
+      };
+    },
+    function (R) {
+      var lines = R.pick([2, 4]), seq = [];
+      for (var i = 0; i < 10; i++) seq.push(seq.length && R.chance(0.5) ? R.pick(seq) : R.int(0, 9));
+      var kinds = classifyMisses(lines, seq), cnt = function (k) { return kinds.filter(function (x) { return x === k; }).length; };
+      return {
+        prompt: p("A direct-mapped cache holds " + lines + " blocks and starts empty. The processor accesses these block numbers in order:") + p(code(seq.join(", "))) +
+          p("How many hits and how many cold misses occur? How many of the other misses are conflict misses (a fully associative LRU cache of the same size would have hit)?"),
+        fields: [num("h", "Hits", cnt("hit")), num("c", "Cold misses", cnt("cold miss")), num("x", "Conflict misses", cnt("conflict miss"))],
+        solution: table(["Block", "Line", "Result"], seq.map(function (b, i) { return [b, b % lines, kinds[i]]; })) +
+          p("Hits " + cnt("hit") + ", cold " + cnt("cold miss") + ", conflict " + cnt("conflict miss") + ", capacity " + cnt("capacity miss") + ".")
+      };
+    }
+  ]);
+
+  G["memory/concepts"] = function (R) {
+    return quiz(R, [
+      { q: "L1 caches are usually built from…", o: ["SRAM", "DRAM", "flash memory", "magnetic disk"], why: "SRAM is fast enough for the cache closest to the processor." },
+      { q: "Average memory access time (AMAT) measures…", o: ["the average time per memory access, over hits and misses", "the time of a cache hit", "the time of a cache miss", "how much memory a program uses"], why: "AMAT = hit time + miss rate × miss penalty." },
+      { q: "A loop that reads an array in order mostly benefits from…", o: ["spatial locality", "temporal locality of the array elements", "neither kind of locality", "a larger register file"], why: "Neighbouring elements share cache blocks." },
+      { q: "The first ever access to a block always causes a…", o: ["cold (compulsory) miss", "conflict miss", "capacity miss", "hit"], why: "The block has never been in the cache." },
+      { q: "Which change most directly reduces conflict misses?", o: ["Increasing associativity", "Increasing block size", "Using write-through", "Decreasing capacity"], why: "More ways per set means fewer blocks evict each other." },
+      { q: "Which change most directly reduces cold misses?", o: ["Larger blocks", "Higher associativity", "LRU instead of FIFO", "A smaller cache"], why: "Each miss brings in more neighbouring data." },
+      { q: "The \"memory wall\" refers to…", o: ["the growing gap between processor speed and memory speed", "the maximum size of main memory", "cache coherence traffic", "the limit on the number of registers"], why: "Processors got faster much more quickly than DRAM." },
+      { q: "The main design goal for an L1 cache is usually a low…", o: ["hit time", "capacity", "associativity", "block size"], why: "L1 is accessed on every load and store, so its speed matters most; L2 focuses on a low miss rate." }
+    ], 3);
   };
 
   /* ----- 3. Cache organization ----- */
-  G["caches/address-bits"] = function (R) {
-    var abits = R.pick([16, 32]), size = Math.pow(2, abits === 16 ? R.int(8, 12) : R.int(10, 16));
-    var block = Math.pow(2, R.int(2, 6)), blocks = size / block;
-    var assoc = R.pick([1, 2, 4, 8].filter(function (a) { return a <= blocks; }));
-    var sets = blocks / assoc, ob = Math.log2(block), ib = Math.log2(sets), tb = abits - ob - ib;
-    var addr = Math.floor(R.f() * Math.pow(2, abits)), set = Math.floor(addr / block) % sets;
-    var kb = size >= 1024 ? (size / 1024) + " KiB" : size + " bytes";
-    var org = assoc === 1 ? "direct-mapped" : assoc + "-way set-associative";
-    return {
-      prompt: p("A " + kb + " " + org + " cache has " + block + "-byte blocks. Addresses are " + abits + " bits and refer to bytes.") +
-        p("How many bits are used for the block offset, set index and tag? Which set does address " + code(hex(addr, abits / 4)) + " map to?"),
-      fields: [num("o", "Offset bits", ob), num("i", "Index bits", ib), num("t", "Tag bits", tb), num("s", "Set (decimal)", set)],
-      solution: p("Blocks = " + size + " ÷ " + block + " = " + blocks + "; sets = " + blocks + " ÷ " + assoc + " = " + sets + ".") +
-        p("Offset = log₂(" + block + ") = <strong>" + ob + "</strong>; index = log₂(" + sets + ") = <strong>" + ib + "</strong>; tag = " + abits + " − " + ob + " − " + ib + " = <strong>" + tb + "</strong>.") +
-        p("Set = ⌊" + addr + " ÷ " + block + "⌋ mod " + sets + " = <strong>" + set + "</strong> (the " + ib + " bits just above the offset).")
-    };
-  };
+  G["caches/address-bits"] = variants([
+    function (R) {
+      var abits = R.pick([16, 32]), size = Math.pow(2, abits === 16 ? R.int(8, 12) : R.int(10, 15));
+      var block = Math.pow(2, R.int(2, 6)), blocks = size / block, assoc = R.pick([1, 2, 4, 8].filter(function (a) { return a <= blocks; }));
+      var sets = blocks / assoc, ob = Math.log2(block), ib = Math.log2(sets), tb = abits - ob - ib;
+      var kb = size >= 1024 ? (size / 1024) + " KiB" : size + "-byte";
+      var org = assoc === 1 ? "direct-mapped" : assoc + "-way set-associative";
+      return {
+        prompt: p("A " + kb + " " + org + " cache has " + block + "-byte blocks. Addresses are " + abits + " bits and refer to bytes. How many bits are used for the offset, index and tag?"),
+        fields: [num("o", "Offset bits", ob), num("i", "Index bits", ib), num("t", "Tag bits", tb)],
+        solution: p("Blocks = " + size + " ÷ " + block + " = " + blocks + "; sets = " + blocks + " ÷ " + assoc + " = " + sets + ".") +
+          p("Offset = log₂ " + block + " = <strong>" + ob + "</strong>; index = log₂ " + sets + " = <strong>" + ib + "</strong>; tag = " + abits + " − " + ob + " − " + ib + " = <strong>" + tb + "</strong>")
+      };
+    },
+    function (R) {
+      var words = Math.pow(2, R.int(9, 12)), bw = R.pick([2, 4, 8]), assoc = R.pick([1, 2, 4, 16]);
+      var bytes = words * 4, block = bw * 4, sets = bytes / block / assoc, ob = Math.log2(block), ib = Math.log2(sets), tb = 32 - ob - ib;
+      return {
+        prompt: p("A 32-bit machine has a " + (assoc === 1 ? "direct-mapped" : assoc + "-way set-associative") + " cache holding " + words + " words (1 word = 4 bytes). Each block holds " + bw + " words. Addresses refer to bytes. How long are the tag, set index and block offset?"),
+        fields: [num("t", "Tag bits", tb), num("i", "Index bits", ib), num("o", "Offset bits", ob)],
+        solution: p("Capacity = " + words + " × 4 = " + bytes + " bytes; block = " + bw + " × 4 = " + block + " bytes; sets = " + bytes + " ÷ " + block + " ÷ " + assoc + " = " + sets + ".") +
+          p("Offset = <strong>" + ob + "</strong>, index = <strong>" + ib + "</strong>, tag = 32 − " + ob + " − " + ib + " = <strong>" + tb + "</strong>")
+      };
+    },
+    function (R) {
+      var ob = R.int(2, 4), ib = R.int(2, 4), tb = R.int(2, 6), w = ob + ib + tb, addr = R.int(0, Math.pow(2, w) - 1);
+      var off = addr & ((1 << ob) - 1), idx = (addr >> ob) & ((1 << ib) - 1), tag = addr >> (ob + ib);
+      return {
+        prompt: p("A cache uses " + w + "-bit byte addresses split into a " + tb + "-bit tag, a " + ib + "-bit set index and a " + ob + "-bit block offset. Split the address " + code(bin(addr, w)) + " (binary) into its fields, in decimal."),
+        fields: [num("t", "Tag", tag), num("i", "Set index", idx), num("o", "Offset", off)],
+        solution: p(code(bin(addr, w)) + " = " + code(bin(tag, tb)) + " | " + code(bin(idx, ib)) + " | " + code(bin(off, ob)) + " → tag <strong>" + tag + "</strong>, set <strong>" + idx + "</strong>, offset <strong>" + off + "</strong>")
+      };
+    },
+    function (R) {
+      var ob = R.int(2, 6), ib = R.int(4, 10), assoc = R.pick([1, 2, 4]), tb = 32 - ob - ib;
+      var size = Math.pow(2, ob) * Math.pow(2, ib) * assoc;
+      return {
+        prompt: p("A " + (assoc === 1 ? "direct-mapped" : assoc + "-way set-associative") + " cache uses 32-bit byte addresses with a " + tb + "-bit tag, a " + ib + "-bit index and a " + ob + "-bit offset. What is the block size, and what is the capacity in bytes?"),
+        fields: [num("b", "Block size", Math.pow(2, ob), { suffix: "bytes" }), num("c", "Capacity", size, { suffix: "bytes" })],
+        solution: p("Block = 2^" + ob + " = <strong>" + Math.pow(2, ob) + "</strong> bytes; sets = 2^" + ib + " = " + Math.pow(2, ib) + "; capacity = " + Math.pow(2, ob) + " × " + Math.pow(2, ib) + " × " + assoc + " = <strong>" + size + "</strong> bytes")
+      };
+    }
+  ]);
 
-  function cacheCfg(R, small) {
-    var ways = R.pick(small ? [1, 2] : [1, 2, 4]), sets = R.pick([2, 4]), block = R.pick([2, 4]);
-    return { ways: ways, sets: sets, block: block };
+  function cacheCfg(R) {
+    var ways = R.pick([1, 2, 2, 4]), sets = ways === 4 ? R.pick([1, 2]) : R.pick([2, 4]), block = R.pick([2, 4]);
+    return { ways: ways, sets: sets, block: block, policy: ways > 1 && R.chance(0.35) ? "fifo" : "lru" };
   }
   function cfgText(c) {
-    var org = c.ways === 1 ? "direct-mapped" : c.ways + "-way set-associative";
-    return "a " + org + " cache with " + c.sets + " sets, " + c.block + "-byte blocks and LRU replacement (capacity " + (c.ways * c.sets * c.block) + " bytes)";
+    var org = c.ways === 1 ? "direct-mapped" : c.sets === 1 ? "fully associative" : c.ways + "-way set-associative";
+    return "a " + org + " cache with " + c.block + "-byte blocks and a capacity of " + (c.ways * c.sets * c.block) + " bytes (" + c.sets + " set" + (c.sets > 1 ? "s" : "") + ")" +
+      (c.ways > 1 ? ", using " + (c.policy === "fifo" ? "FIFO" : "LRU") + " replacement" : "");
   }
   function randomAddrs(R, n, max) {
     var a = [];
-    for (var i = 0; i < n; i++) a.push(a.length && R.chance(0.4) ? R.pick(a) + R.int(-1, 1) : R.int(0, max));
+    for (var i = 0; i < n; i++) a.push(a.length && R.chance(0.45) ? R.pick(a) + R.int(-1, 1) : R.int(0, max));
     return a.map(function (x) { return Math.max(0, Math.min(max, x)); });
+  }
+  function simSolution(c, sim) {
+    return table(["Address", "Block", "Set", "Result"], sim.steps.map(function (s) {
+      return [s.addr, s.start + "–" + (s.start + c.block - 1), s.set, s.hit ? "hit" : "miss"];
+    }));
   }
 
   G["caches/cache-sim"] = function (R) {
-    var c = cacheCfg(R, true), addrs = randomAddrs(R, 10, 8 * c.sets * c.block - 1), sim = simulateCache(c, addrs);
+    var c = cacheCfg(R), addrs = randomAddrs(R, 10, 6 * c.sets * c.block - 1), sim = simulateCache(c, addrs);
     var hits = sim.steps.filter(function (s) { return s.hit; }).length;
-    var fields = sim.sets.map(function (lines, s) {
-      return { id: "set" + s, label: "Set " + s, kind: "set", answer: lines.slice().sort(function (a, b) { return a - b; }), size: 10 };
-    });
+    var fields = sim.sets.map(function (lines, s) { return { id: "set" + s, label: "Set " + s, kind: "set", answer: lines.slice().sort(function (a, b) { return a - b; }), size: 10 }; });
     fields.push(num("hits", "Number of hits", hits));
     return {
-      prompt: p("Consider " + cfgText(c) + ". It starts empty. The processor accesses these byte addresses in order:") +
-        p(code(addrs.join(", "))) +
-        p("After all accesses, which blocks are in each set? Give the lowest byte address of each block, separated by commas (any order; leave blank if empty)."),
+      prompt: p("Consider " + cfgText(c) + ". It starts empty, and these byte addresses are accessed in order:") + p(code(addrs.join(", "))) +
+        p("Which blocks are in each set at the end? Give the lowest byte address of each block, separated by commas (any order; blank if empty)."),
       fields: fields,
-      solution: table(["Address", "Block", "Set", "Result"], sim.steps.map(function (s) {
-        return [s.addr, s.start + "–" + (s.start + c.block - 1), s.set, s.hit ? "hit" : "miss"];
-      })) + p("Final contents: " + sim.sets.map(function (l, s) {
+      solution: simSolution(c, sim) + p("Final contents: " + sim.sets.map(function (l, s) {
         return "set " + s + ": " + (l.length ? l.map(function (b) { return b + "–" + (b + c.block - 1); }).join(", ") : "empty");
-      }).join("; ") + ". Hits: <strong>" + hits + "</strong>.")
+      }).join("; ") + ". Hits: <strong>" + hits + "</strong>." + (c.policy === "fifo" ? " With FIFO, a hit does not change which block is evicted next." : ""))
     };
   };
 
   G["caches/hit-rate"] = function (R) {
-    var c = cacheCfg(R, false), addrs = randomAddrs(R, 10, 6 * c.sets * c.block - 1), sim = simulateCache(c, addrs);
-    var hits = sim.steps.filter(function (s) { return s.hit; }).length;
+    var c = cacheCfg(R), addrs = randomAddrs(R, 10, 5 * c.sets * c.block - 1), sim = simulateCache(c, addrs);
+    var hits = sim.steps.filter(function (s) { return s.hit; }).length, cold = sim.steps.filter(function (s) { return s.cold; }).length;
     var fields = sim.steps.map(function (s, i) { return choice("h" + i, "", ["hit", "miss"], s.hit ? "hit" : "miss"); });
-    fields.push(num("rate", "Hit rate", hits * 10, { suffix: "%", tol: 0.5 }));
+    fields.push(num("rate", "Hit rate", hits * 10, { suffix: "%" }), num("cold", "Cold misses", cold));
     return {
-      prompt: p("Consider " + cfgText(c) + ". It starts empty. Mark each access to the byte addresses below as a hit or a miss, then give the hit rate."),
+      prompt: p("Consider " + cfgText(c) + ". It starts empty. Mark each access below as a hit or a miss, then give the hit rate and the number of cold misses."),
       table: { head: ["Access", "Address", "Result"], rows: addrs.map(function (a, i) { return [i + 1, a, { f: "h" + i }]; }) },
       fields: fields,
-      solution: table(["Address", "Block", "Set", "Result"], sim.steps.map(function (s) {
-        return [s.addr, s.start + "–" + (s.start + c.block - 1), s.set, "<strong>" + (s.hit ? "hit" : "miss") + "</strong>"];
-      })) + p("Hit rate = " + hits + " ÷ 10 = <strong>" + hits * 10 + "%</strong>")
+      solution: simSolution(c, sim) + p("Hit rate = " + hits + " ÷ 10 = <strong>" + hits * 10 + "%</strong>; cold misses (first touch of a block): <strong>" + cold + "</strong>")
     };
   };
 
-  /* ----- 4. Numbers and combinational logic ----- */
-  function s8(n) { n &= 0xff; return n >= 128 ? n - 256 : n; }
-  G["logic/twos-complement"] = function (R) {
-    var v = 0;
-    while (v === 0) v = R.int(-128, 127);
-    var b = bin(v & 0xff, 8), variant = R.int(0, 4);
-    if (variant === 0) return {
-      prompt: p("Write " + v + " as an 8-bit two's complement number."),
-      fields: [{ id: "b", label: "Binary", kind: "bits", width: 8, answer: b, size: 12 }],
-      solution: v >= 0 ? p(v + " in binary is <strong>" + b + "</strong>.")
-        : p(Math.abs(v) + " = " + bin(-v, 8) + "; invert the bits: " + bin(~(-v) & 0xff, 8) + "; add 1: <strong>" + b + "</strong>.")
-    };
-    if (variant === 1) return {
-      prompt: p("What decimal value does the 8-bit two's complement number " + code(b) + " represent?"),
-      fields: [num("d", "Decimal", v)],
-      solution: p(b[0] === "1" ? "The sign bit is 1, so the value is " + (v & 0xff) + " − 256 = <strong>" + v + "</strong>." : "The sign bit is 0, so the value is <strong>" + v + "</strong>.")
-    };
-    if (variant === 2) {
-      if (v === -128) v = -127;
-      b = bin(v & 0xff, 8);
-      var nb = bin(-v & 0xff, 8);
-      return {
-        prompt: p("The 8-bit two's complement number " + code(b) + " represents " + v + ". Write " + (-v) + " in 8-bit two's complement."),
-        fields: [{ id: "b", label: "Binary", kind: "bits", width: 8, answer: nb, size: 12 }],
-        solution: p("Invert the bits: " + bin(~v & 0xff, 8) + "; add 1: <strong>" + nb + "</strong>.")
-      };
-    }
-    if (variant === 3) {
-      var byte = v & 0xff, ext = byte >= 128 ? (0xff00 | byte) : byte;
-      return {
-        prompt: p("Sign-extend the 8-bit value " + code(hex(byte, 2)) + " to 16 bits. Give the answer in hexadecimal."),
-        fields: [{ id: "h", label: "16-bit value", kind: "hex", answer: ext, size: 10 }],
-        solution: p("The sign bit of " + bin(byte, 8) + " is " + (byte >> 7) + ", so the upper 8 bits are all " + (byte >> 7) + "s: <strong>" + hex(ext, 4) + "</strong>.")
-      };
-    }
-    var n = R.int(4, 16), lo = -Math.pow(2, n - 1), hi = Math.pow(2, n - 1) - 1;
-    return {
-      prompt: p("What range of values can an " + n + "-bit two's complement number represent?"),
-      fields: [num("lo", "Smallest", lo), num("hi", "Largest", hi)],
-      solution: p("−2ⁿ⁻¹ to 2ⁿ⁻¹ − 1 = <strong>" + lo + "</strong> to <strong>" + hi + "</strong>.")
-    };
+  G["caches/concepts"] = function (R) {
+    return quiz(R, [
+      { q: "In a direct-mapped cache, a block can be placed in…", o: ["exactly one line", "any line", "any line of one set of several", "two lines"], why: "Direct-mapped means one way per set." },
+      { q: "How many sets does a fully associative cache have?", o: ["1", "One per block", "2", "It depends on the block size"], why: "All lines belong to a single set." },
+      { q: "A write-through cache…", o: ["updates memory on every write", "updates memory only when a dirty line is evicted", "never updates memory", "does not cache written data"], why: "Write-back is the one that waits until eviction." },
+      { q: "A write-back cache needs an extra bit per line called the…", o: ["dirty bit", "valid bit", "sign bit", "parity bit"], why: "It records whether the line differs from memory." },
+      { q: "Why are the middle address bits used as the set index?", o: ["So consecutive blocks map to different sets", "Because the top bits are always zero", "To make the tag shorter", "Because the offset needs the top bits"], why: "Programs touch neighbouring blocks, which should not collide." },
+      { q: "LRU replacement evicts the block that…", o: ["was used least recently", "was loaded first", "was used most recently", "is chosen at random"], why: "FIFO is the one that evicts the block loaded first." },
+      { q: "Doubling associativity while keeping capacity and block size fixed…", o: ["halves the number of sets", "doubles the number of sets", "doubles the block size", "removes the tag"], why: "Index loses one bit and the tag gains one." },
+      { q: "On a cache hit with FIFO replacement…", o: ["the replacement order does not change", "the block moves to the back of the queue", "the block is evicted", "the whole set is flushed"], why: "FIFO only tracks arrival order." }
+    ], 3);
   };
+
+  /* ----- 4. Numbers and logic ----- */
+  function sx(n, w) { n &= (1 << w) - 1; return n >= (1 << (w - 1)) ? n - (1 << w) : n; }
+  G["logic/twos-complement"] = variants([
+    function (R) {
+      var w = R.pick([6, 8]), lim = 1 << (w - 1), v = R.until(function () { return R.int(-lim, lim - 1); }, function (x) { return x !== 0; }), b = bin(v & ((1 << w) - 1), w);
+      return {
+        prompt: p("Write " + v + " as a " + w + "-bit two's complement number."),
+        fields: [{ id: "b", label: "Binary", kind: "bits", width: w, answer: b, size: 12 }],
+        solution: v >= 0 ? p(v + " = <strong>" + b + "</strong>") : p(-v + " = " + bin(-v, w) + "; invert: " + bin(~(-v) & ((1 << w) - 1), w) + "; add 1: <strong>" + b + "</strong>")
+      };
+    },
+    function (R) {
+      var w = R.pick([6, 8]), lim = 1 << (w - 1), v = R.int(-lim, lim - 1), b = bin(v & ((1 << w) - 1), w);
+      return {
+        prompt: p("What decimal value does the " + w + "-bit two's complement number " + code(b) + " represent?"),
+        fields: [num("d", "Decimal", v)],
+        solution: p(b[0] === "1" ? "Sign bit 1: value = " + (v & ((1 << w) - 1)) + " − " + (1 << w) + " = <strong>" + v + "</strong>" : "Sign bit 0: value = <strong>" + v + "</strong>")
+      };
+    },
+    function (R) {
+      var byte = R.int(0, 255), ext = byte >= 128 ? (0xff00 | byte) : byte;
+      return {
+        prompt: p("Sign-extend the 8-bit value " + code(hex(byte, 2)) + " to 16 bits, in hexadecimal."),
+        fields: [{ id: "h", label: "16-bit value", kind: "hex", answer: ext, size: 10 }],
+        solution: p("The sign bit of " + bin(byte, 8) + " is " + (byte >> 7) + ", so the new upper byte is " + (byte >> 7 ? "FF" : "00") + ": <strong>" + hex(ext, 4) + "</strong>")
+      };
+    },
+    function (R) {
+      var n = R.int(4, 16), lo = -Math.pow(2, n - 1), hi = Math.pow(2, n - 1) - 1;
+      return { prompt: p("What range of values can an " + n + "-bit two's complement number hold?"), fields: [num("lo", "Smallest", lo), num("hi", "Largest", hi)], solution: p("−2^" + (n - 1) + " to 2^" + (n - 1) + " − 1: <strong>" + lo + "</strong> to <strong>" + hi + "</strong>") };
+    },
+    function (R) {
+      var w = R.pick([6, 8]), v = -R.int(1, (1 << (w - 1)) - 1), kind = R.pick(["one's complement", "sign-magnitude"]), mask = (1 << w) - 1;
+      var b = kind === "one's complement" ? bin(~(-v) & mask, w) : "1" + bin(-v, w - 1);
+      return {
+        prompt: p("Write " + v + " as a " + w + "-bit <strong>" + kind + "</strong> number."),
+        fields: [{ id: "b", label: "Binary", kind: "bits", width: w, answer: b, size: 12 }],
+        solution: p(kind === "one's complement" ? "Write " + -v + " = " + bin(-v, w) + " and invert every bit: <strong>" + b + "</strong> (no +1, unlike two's complement)."
+          : "Sign bit 1, then " + -v + " in the remaining " + (w - 1) + " bits: <strong>" + b + "</strong>")
+      };
+    },
+    function (R) {
+      var v = R.int(-100, 100), sh = R.int(1, 3), u = v & 0xff, arith = R.chance(0.5);
+      var res = arith ? ((v >> sh) & 0xff) : (u >>> sh);
+      return {
+        prompt: p("An 8-bit register holds " + code(bin(u, 8)) + ". What does it hold after a <strong>" + (arith ? "arithmetic" : "logical") + "</strong> right shift by " + sh + "?"),
+        fields: [{ id: "b", label: "Result", kind: "bits", width: 8, answer: bin(res, 8), size: 12 }],
+        solution: p((arith ? "An arithmetic shift copies the sign bit (" + (u >> 7) + ") into the vacated bits" : "A logical shift fills the vacated bits with 0") + ": <strong>" + bin(res, 8) + "</strong>")
+      };
+    }
+  ]);
 
   G["logic/binary-add"] = function (R) {
-    var a = R.int(-128, 127), b = R.int(-128, 127), sub = R.chance(0.4);
-    var ua = a & 0xff, ub = b & 0xff, raw, res, ovf, carry;
-    if (!sub) {
-      raw = ua + ub; res = raw & 0xff; carry = (raw >> 8) & 1;
-      ovf = (a < 0) === (b < 0) && (s8(res) < 0) !== (a < 0);
-    } else {
-      raw = ua + ((~ub) & 0xff) + 1; res = raw & 0xff; carry = (raw >> 8) & 1;
-      ovf = (a < 0) !== (b < 0) && (s8(res) < 0) !== (a < 0);
-    }
-    var fields = [{ id: "r", label: "8-bit result", kind: "bits", width: 8, answer: bin(res, 8), size: 12 },
-      choice("o", "Signed overflow?", ["yes", "no"], ovf ? "yes" : "no")];
+    var w = R.pick([6, 8]), lim = 1 << (w - 1), mask = (1 << w) - 1, a = R.int(-lim, lim - 1), b = R.int(-lim, lim - 1), sub = R.chance(0.4);
+    var ua = a & mask, ub = b & mask, raw = sub ? ua + ((~ub) & mask) + 1 : ua + ub, res = raw & mask, carry = (raw >> w) & 1;
+    var exactSum = sub ? a - b : a + b, ovf = exactSum < -lim || exactSum > lim - 1;
+    var fields = [{ id: "r", label: w + "-bit result", kind: "bits", width: w, answer: bin(res, w), size: 12 }, choice("o", "Signed overflow?", YN, ovf ? "yes" : "no")];
     if (!sub) fields.push(choice("c", "Carry out", ["0", "1"], String(carry)));
-    var exact = sub ? a - b : a + b;
     return {
-      prompt: p((sub ? "Subtract" : "Add") + " these 8-bit two's complement numbers: " + code(bin(ua, 8)) + (sub ? " − " : " + ") + code(bin(ub, 8)) + ".") +
-        p("Give the 8-bit result and say whether signed overflow occurs" + (sub ? "." : ", and give the carry out of the most significant bit.")),
+      prompt: p((sub ? "Subtract" : "Add") + " these " + w + "-bit two's complement numbers: " + code(bin(ua, w)) + (sub ? " − " : " + ") + code(bin(ub, w)) + ". Does signed overflow occur?"),
       fields: fields,
-      solution: p("In decimal: " + a + (sub ? " − " : " + ") + b + " = " + exact + ".") +
-        (sub ? p("Subtracting adds the two's complement of the second number: " + bin(ua, 8) + " + " + bin(((~ub) + 1) & 0xff, 8) + ".") : "") +
-        p("Result: <strong>" + bin(res, 8) + "</strong> (" + s8(res) + " as a signed number). " +
-          (ovf ? "<strong>Overflow</strong>: " + exact + " is outside −128 to 127." : "<strong>No overflow</strong>: " + exact + " fits in 8 bits.") +
-          (sub ? "" : " Carry out: <strong>" + carry + "</strong>."))
+      solution: p("In decimal: " + a + (sub ? " − " : " + ") + b + " = " + exactSum + ".") +
+        (sub ? p("Subtraction adds the two's complement: " + bin(ua, w) + " + " + bin(((~ub) + 1) & mask, w) + ".") : "") +
+        p("Result <strong>" + bin(res, w) + "</strong> (" + sx(res, w) + "). " + (ovf ? "<strong>Overflow</strong>: " + exactSum + " is outside " + -lim + " to " + (lim - 1) + "." : "<strong>No overflow</strong>.") + (sub ? "" : " Carry out <strong>" + carry + "</strong>."))
     };
   };
 
   var SIMPLE_FORMS = ["x", "xy", "x+y", "xy+z", "x'y+xz", "xy+yz+xz", "xy'+x'y", "x+yz", "x'z+y", "xyz+x'y'z'", "x'y'+z", "xz+y'z"];
-  G["logic/boolean-simplify"] = function (R) {
-    var vars = ["x", "y", "z"], target = remapExpr(R.pick(SIMPLE_FORMS), randomRemap(R, vars));
-    var parsed = parseBool(target, vars), tt = truthTable(parsed.tree, vars), ms = minterms(tt);
-    var given = ms.map(function (m) { return mintermText(m, vars); }).join(" + ");
-    return {
-      prompt: p("Simplify the Boolean expression") + p("<span class=\"expr\">F = " + esc(given) + "</span>") +
-        p("Write a simplest equivalent expression. Type " + code("x'") + " for NOT x, " + code("+") + " for OR, and put variables side by side (or use " + code("*") + ") for AND."),
-      fields: [{ id: "e", label: "F =", kind: "bool", vars: vars, table: tt, maxLiterals: parsed.literals, example: target, size: 22 }],
-      solution: p("One simplest form is <strong>F = " + esc(target) + "</strong> (" + parsed.literals + " literal" + (parsed.literals > 1 ? "s" : "") + ").") +
-        p("F is 1 for minterms " + ms.join(", ") + ". Group adjacent minterms (those differing in one variable) and drop the variable that changes, using xy + xy' = x.")
-    };
-  };
+  var NUM_CONDS = [
+    { t: "the number is negative", two: true, f: function (n) { return n < 0; } },
+    { t: "the number is odd", two: false, f: function (n) { return n % 2 !== 0; } },
+    { t: "the number is at least 4", two: false, f: function (n) { return n >= 4; } },
+    { t: "the number is greater than 2", two: false, f: function (n) { return n > 2; } },
+    { t: "the number is 0", two: true, f: function (n) { return n === 0; } },
+    { t: "the number is a multiple of 3", two: false, f: function (n) { return n % 3 === 0; } },
+    { t: "the number is between −2 and 1 (inclusive)", two: true, f: function (n) { return n >= -2 && n <= 1; } },
+    { t: "the number is 1 or 2", two: false, f: function (n) { return n === 1 || n === 2; } }
+  ];
+  G["logic/boolean-simplify"] = variants([
+    function (R) {
+      var vars = ["x", "y", "z"], target = remapExpr(R.pick(SIMPLE_FORMS), randomRemap(R, vars)), tt = ttOf(target, vars), best = minSop(tt, vars);
+      var given = minterms(tt).map(function (m) { return mintermText(m, vars); }).join(" + ");
+      return {
+        prompt: p("Simplify") + p("<span class=\"expr\">F = " + esc(given) + "</span>") + p("Type " + code("x'") + " for NOT x, " + code("+") + " for OR, and put variables side by side for AND."),
+        fields: [{ id: "e", label: "F =", kind: "bool", vars: vars, table: tt, maxLiterals: best.literals, example: best.expr, size: 22 }],
+        solution: p("A simplest form is <strong>F = " + esc(best.expr) + "</strong> (" + best.literals + " literals). Combine minterms that differ in one variable using xy + xy' = x.")
+      };
+    },
+    function (R) {
+      var vars = ["a", "b", "c"], cond = R.pick(NUM_CONDS), two = cond.two, tt = [];
+      for (var m = 0; m < 8; m++) tt.push(cond.f(two ? sx(m, 3) : m) ? 1 : 0);
+      var best = minSop(tt, vars);
+      return {
+        prompt: p("The bits a b c (a is the most significant) represent a 3-bit " + (two ? "<strong>two's complement</strong>" : "<strong>unsigned</strong>") + " number. Write a simplest Boolean expression for y, where y = 1 exactly when " + cond.t + "."),
+        fields: [{ id: "e", label: "y =", kind: "bool", vars: vars, table: tt, maxLiterals: best.literals, example: best.expr, size: 22 }],
+        solution: table(["a b c", "value", "y"], tt.map(function (v, k) { return [bin(k, 3), two ? sx(k, 3) : k, v]; })) + p("Simplest form: <strong>y = " + esc(best.expr) + "</strong>")
+      };
+    },
+    function (R) {
+      var vars = ["x", "y", "z"], forms = R.shuffle(SIMPLE_FORMS), map = randomRemap(R, vars), right = remapExpr(forms[0], map), tt = ttOf(right, vars);
+      var given = minterms(tt).map(function (m) { return mintermText(m, vars); }).join(" + "), opts = [right];
+      for (var i = 1; i < forms.length && opts.length < 4; i++) {
+        var e = remapExpr(forms[i], map);
+        if (ttOf(e, vars).join("") !== tt.join("") && opts.indexOf(e) === -1) opts.push(e);
+      }
+      return {
+        prompt: p("Which expression is equivalent to <span class=\"expr\">F = " + esc(given) + "</span>?"),
+        fields: [choice("c", "F =", R.shuffle(opts), right, { wide: true })],
+        solution: p("<strong>" + esc(right) + "</strong> is 1 for exactly the same minterms (" + minterms(tt).join(", ") + ").")
+      };
+    }
+  ]);
 
   var TT_FORMS = ["(x+y')z", "x'y+yz'", "(x+y)(y'+z)", "(xy)'+z", "x(y+z')", "x'y'z+xz", "(x+z)'+y", "xy'+yz+x'z'", "(x+y+z)(x'+y')"];
-  G["logic/truth-table"] = function (R) {
-    var vars = ["x", "y", "z"], e = remapExpr(R.pick(TT_FORMS), randomRemap(R, vars));
-    var tt = truthTable(parseBool(e, vars).tree, vars), ms = minterms(tt);
-    var fields = tt.map(function (v, i) { return bit("r" + i, v); });
-    fields.push({ id: "m", label: "Minterms where F = 1", kind: "set", answer: ms, size: 16 });
-    return {
-      prompt: p("Complete the truth table for <span class=\"expr\">F = " + esc(e) + "</span>, then list the minterms (row numbers) where F = 1."),
-      table: { head: ["Row", "x", "y", "z", "F"], rows: tt.map(function (v, i) { return [i, (i >> 2) & 1, (i >> 1) & 1, i & 1, { f: "r" + i }]; }) },
-      fields: fields,
-      solution: p("F = Σm(" + ms.join(", ") + ")") +
-        p("Sum of products: F = " + ms.map(function (m) { return mintermText(m, vars); }).join(" + "))
-    };
+  G["logic/truth-table"] = variants([
+    function (R) {
+      var vars = ["x", "y", "z"], e = remapExpr(R.pick(TT_FORMS), randomRemap(R, vars)), tt = ttOf(e, vars), ms = minterms(tt);
+      var fields = tt.map(function (v, i) { return bit("r" + i, v); });
+      fields.push({ id: "m", label: "Minterms where F = 1", kind: "set", answer: ms, size: 16 });
+      return {
+        prompt: p("Complete the truth table for <span class=\"expr\">F = " + esc(e) + "</span>, then list the rows where F = 1."),
+        table: { head: ["Row", "x", "y", "z", "F"], rows: tt.map(function (v, i) { return [i, (i >> 2) & 1, (i >> 1) & 1, i & 1, { f: "r" + i }]; }) },
+        fields: fields,
+        solution: p("F = Σm(" + ms.join(", ") + ") = " + ms.map(function (m) { return mintermText(m, vars); }).join(" + "))
+      };
+    },
+    function (R) {
+      var vars = ["a", "b", "c"], tt = R.until(function () { var t = []; for (var i = 0; i < 8; i++) t.push(R.int(0, 1)); return t; }, function (t) { var k = sum(t); return k >= 2 && k <= 6; });
+      var best = minSop(tt, vars);
+      return {
+        prompt: p("Write a simplest Boolean expression for F from its truth table.") + table(["a", "b", "c", "F"], tt.map(function (v, m) { return [(m >> 2) & 1, (m >> 1) & 1, m & 1, v]; })),
+        fields: [{ id: "e", label: "F =", kind: "bool", vars: vars, table: tt, maxLiterals: best.literals, example: best.expr, size: 22 }],
+        solution: p("Sum of minterms: F = " + minterms(tt).map(function (m) { return mintermText(m, vars); }).join(" + ") + ". Simplified: <strong>F = " + esc(best.expr) + "</strong>")
+      };
+    },
+    function (R) {
+      var vars = ["a", "b", "c"], forms = R.shuffle(TT_FORMS.map(function (f) { return f.replace(/x/g, "a").replace(/y/g, "b").replace(/z/g, "c"); }));
+      var right = forms[0], tt = ttOf(right, vars), opts = [right];
+      for (var i = 1; i < forms.length && opts.length < 4; i++) if (ttOf(forms[i], vars).join("") !== tt.join("")) opts.push(forms[i]);
+      return {
+        prompt: p("Which formula has this truth table?") + table(["a", "b", "c", "F"], tt.map(function (v, m) { return [(m >> 2) & 1, (m >> 1) & 1, m & 1, v]; })),
+        fields: [choice("c", "F =", R.shuffle(opts), right, { wide: true })],
+        solution: p("<strong>F = " + esc(right) + "</strong>: it is 1 exactly in rows " + minterms(tt).join(", ") + ".")
+      };
+    }
+  ]);
+
+  G["logic/concepts"] = function (R) {
+    return quiz(R, [
+      { q: "Which single operator is functionally complete on its own?", o: ["NAND", "AND", "OR", "XOR"], why: "NOT, AND and OR can all be built from NAND alone (NOR works too)." },
+      { q: "In two's complement, you negate a number by…", o: ["inverting every bit and adding 1", "inverting every bit", "flipping the sign bit", "subtracting 1 and inverting"], why: "Inverting alone gives one's complement." },
+      { q: "Sign-extending a negative 8-bit number to 16 bits fills the new bits with…", o: ["1s", "0s", "a copy of the low byte", "alternating bits"], why: "Copies of the sign bit preserve the value." },
+      { q: "Signed overflow can only occur when you add two numbers that…", o: ["have the same sign", "have different signs", "are both zero", "are powers of two"], why: "Adding numbers of opposite signs moves toward zero." },
+      { q: "A multiplexer choosing among 8 inputs needs how many select bits?", o: ["3", "8", "2", "4"], why: "2³ = 8." },
+      { q: "(x + y)' equals…", o: ["x'y'", "x' + y'", "xy", "x + y"], why: "De Morgan's law." },
+      { q: "x + xy simplifies to…", o: ["x", "y", "xy", "x + y"], why: "Absorption: x(1 + y) = x." },
+      { q: "What is −20 in 6-bit one's complement?", o: ["101011", "101100", "010100", "110100"], why: "20 = 010100; invert every bit: 101011." }
+    ], 3);
   };
 
   /* ----- 5. Sequential circuits ----- */
-  G["sequential/flip-flops"] = function (R) {
-    var type = R.pick(["JK", "T", "D", "SR"]), q = R.int(0, 1), q0 = q, n = 5;
-    var ins = [], cur = [], next = [];
-    for (var c = 0; c < n; c++) {
-      var i = {};
-      if (type === "JK") { i.J = R.int(0, 1); i.K = R.int(0, 1); }
-      else if (type === "T") i.T = R.int(0, 1);
-      else if (type === "D") i.D = R.int(0, 1);
-      else { i.S = R.int(0, 1); i.R = i.S ? 0 : R.int(0, 1); }
-      var nq = type === "JK" ? ((i.J & (1 - q)) | ((1 - i.K) & q))
-        : type === "T" ? (i.T ^ q) : type === "D" ? i.D : (i.S | ((1 - i.R) & q));
-      ins.push(i); cur.push(q); next.push(nq); q = nq;
+  function ffNext(type, q, i) {
+    return type === "JK" ? ((i.J & (1 - q)) | ((1 - i.K) & q)) : type === "T" ? (i.T ^ q) : type === "D" ? i.D : (i.S | ((1 - i.R) & q));
+  }
+  function ffInputs(R, type) {
+    if (type === "JK") return { J: R.int(0, 1), K: R.int(0, 1) };
+    if (type === "T") return { T: R.int(0, 1) };
+    if (type === "D") return { D: R.int(0, 1) };
+    var s = R.int(0, 1); return { S: s, R: s ? 0 : R.int(0, 1) };
+  }
+  var FF_RULE = { JK: "Q<sub>next</sub> = J·Q' + K'·Q (J = K = 1 toggles)", T: "Q<sub>next</sub> = T xor Q", D: "Q<sub>next</sub> = D", SR: "Q<sub>next</sub> = S + R'·Q (S sets, R resets, S = R = 1 not allowed)" };
+  G["sequential/flip-flops"] = variants([
+    function (R) {
+      var type = R.pick(["JK", "T", "D", "SR"]), q = R.int(0, 1), q0 = q, ins = [], cur = [], next = [];
+      for (var c = 0; c < 5; c++) { var i = ffInputs(R, type), nq = ffNext(type, q, i); ins.push(i); cur.push(q); next.push(nq); q = nq; }
+      var names = Object.keys(ins[0]), fields = [], rows = [];
+      rows.push(["Q<sub>current</sub>"].concat(cur.map(function (v, c2) { if (c2 === 0) return v; fields.push(bit("q" + c2, v)); return { f: "q" + c2 }; })));
+      names.forEach(function (nm) { rows.push([nm].concat(ins.map(function (x) { return x[nm]; }))); });
+      rows.push(["Q<sub>next</sub>"].concat(next.map(function (v, c3) { fields.push(bit("n" + c3, v)); return { f: "n" + c3 }; })));
+      return {
+        prompt: p("A " + type + " flip-flop starts with Q = " + q0 + ". Complete the table; each cycle's Q<sub>next</sub> is the next cycle's Q<sub>current</sub>."),
+        table: { head: ["Clock cycle", 0, 1, 2, 3, 4], rows: rows },
+        fields: fields,
+        solution: p(FF_RULE[type] + ".") + table(["Cycle", "Q"].concat(names).concat(["Q<sub>next</sub>"]), ins.map(function (x, c4) {
+          return [c4, cur[c4]].concat(names.map(function (nm) { return x[nm]; })).concat(["<strong>" + next[c4] + "</strong>"]);
+        }))
+      };
+    },
+    function (R) {
+      var rows = [], fields = [], sol = [];
+      for (var k = 0; k < 4; k++) {
+        var type = R.pick(["JK", "T", "D", "SR"]), q = R.int(0, 1), i = ffInputs(R, type), nq = ffNext(type, q, i);
+        var inText = Object.keys(i).map(function (nm) { return nm + " = " + i[nm]; }).join(", ");
+        rows.push([type, q, inText, { f: "n" + k }]); fields.push(bit("n" + k, nq));
+        sol.push(type + ": Q = " + q + ", " + inText + " → <strong>" + nq + "</strong>");
+      }
+      return {
+        prompt: p("Give the next state of each flip-flop after one clock edge."),
+        table: { head: ["Flip-flop", "Q", "Inputs", "Q<sub>next</sub>"], rows: rows },
+        fields: fields, solution: ul(sol)
+      };
     }
-    var names = Object.keys(ins[0]), fields = [], rows = [];
-    var cycleRow = ["Clock cycle"].concat([0, 1, 2, 3, 4]);
-    rows.push(["Q<sub>current</sub>"].concat(cur.map(function (v, c) { if (c === 0) return v; fields.push(bit("q" + c, v)); return { f: "q" + c }; })));
-    names.forEach(function (nm) { rows.push([nm].concat(ins.map(function (i) { return i[nm]; }))); });
-    rows.push(["Q<sub>next</sub>"].concat(next.map(function (v, c) { fields.push(bit("n" + c, v)); return { f: "n" + c }; })));
-    var rule = { JK: "Q<sub>next</sub> = J·Q' + K'·Q (J=K=1 toggles)", T: "Q<sub>next</sub> = T xor Q", D: "Q<sub>next</sub> = D", SR: "Q<sub>next</sub> = S + R'·Q (S sets, R resets)" }[type];
-    return {
-      prompt: p("A " + type + " flip-flop starts with Q<sub>current</sub> = " + q0 + ". Complete the table: Q<sub>next</sub> for each cycle becomes Q<sub>current</sub> for the next cycle."),
-      table: { head: cycleRow, rows: rows },
-      fields: fields,
-      solution: p(rule + ".") + table(["Cycle", "Q<sub>current</sub>"].concat(names).concat(["Q<sub>next</sub>"]), ins.map(function (i, c) {
-        return [c, cur[c]].concat(names.map(function (nm) { return i[nm]; })).concat(["<strong>" + next[c] + "</strong>"]);
-      }))
-    };
-  };
+  ]);
 
-  G["sequential/clock-period"] = function (R) {
-    var cq = R.int(3, 8) * 10, setup = R.int(2, 6) * 10, hold = R.int(1, 4) * 10;
-    var paths = [["A", "B"], ["B", "C"], ["A", "C"]].map(function (pr) { return { from: pr[0], to: pr[1], d: R.int(10, 90) * 10 }; });
-    var worst = Math.max.apply(null, paths.map(function (x) { return x.d; })), period = cq + worst + setup, mhz = 1e6 / period;
-    return {
-      prompt: p("A synchronous circuit has registers A, B and C. Each register has a clk-to-q delay of " + cq + " ps, a setup time of " + setup +
-        " ps and a hold time of " + hold + " ps. The combinational logic between registers has these delays:") +
-        table(["Path", "Delay"], paths.map(function (x) { return [x.from + " → " + x.to, x.d + " ps"]; })) +
-        p("What is the minimum clock period and the maximum clock frequency? Does the hold time affect the maximum frequency?"),
-      fields: [num("t", "Minimum period", period, { suffix: "ps" }), num("f", "Maximum frequency", round(mhz, 1), { rel: 0.005, suffix: "MHz" }),
-        choice("h", "Hold time affects it?", ["yes", "no"], "no")],
-      solution: p("Period = clk-to-q + longest combinational delay + setup = " + cq + " + " + worst + " + " + setup + " = <strong>" + period + " ps</strong>.") +
-        p("Frequency = 1 ÷ " + period + " ps = <strong>" + fmt(mhz, 1) + " MHz</strong>.") +
-        p("Hold time constrains the <em>shortest</em> paths (data must not change too soon after the edge), not the clock period, so: <strong>no</strong>.")
-    };
-  };
+  G["sequential/clock-period"] = variants([
+    function (R) {
+      var o = R.until(function () { return { cq: R.pick([20, 30, 40, 50]), su: R.pick([20, 30, 40, 50]), hold: R.pick([10, 20, 30]), period: R.pick([200, 250, 400, 500, 1000]) }; },
+        function (x) { return x.period - x.cq - x.su >= 100; });
+      var worst = o.period - o.cq - o.su, others = [R.int(4, worst / 10 - 2) * 10, R.int(4, worst / 10 - 2) * 10], paths = R.shuffle([worst].concat(others));
+      var ghz = 1000 / o.period;
+      return {
+        prompt: p("Registers A, B and C have a clk-to-q delay of " + o.cq + " ps, a setup time of " + o.su + " ps and a hold time of " + o.hold + " ps. The logic between them has these delays:") +
+          table(["Path", "Delay"], [["A → B", paths[0] + " ps"], ["B → C", paths[1] + " ps"], ["A → C", paths[2] + " ps"]]) +
+          p("What is the minimum clock period, and the maximum clock frequency?"),
+        fields: [num("t", "Minimum period", o.period, { suffix: "ps" }), num("f", "Maximum frequency", round(ghz, 2), { suffix: "GHz" })],
+        solution: p("Period = clk-to-q + longest path + setup = " + o.cq + " + " + worst + " + " + o.su + " = <strong>" + o.period + " ps</strong>; frequency = 1 ÷ " + o.period + " ps = <strong>" + fmt(ghz) + " GHz</strong>. Hold time does not limit the period.")
+      };
+    },
+    function (R) {
+      var o = R.until(function () { return { cq: R.pick([20, 30, 40, 50]), su: R.pick([20, 30, 40, 50]), f: R.pick([1, 2, 2.5, 4]) }; }, function (x) { return 1000 / x.f - x.cq - x.su > 0; });
+      var period = 1000 / o.f, maxc = period - o.cq - o.su;
+      return {
+        prompt: p("A synchronous circuit must run at " + o.f + " GHz. Its registers have a clk-to-q delay of " + o.cq + " ps and a setup time of " + o.su + " ps. What is the longest the combinational logic between registers may take?"),
+        fields: [num("c", "Longest logic delay", maxc, { suffix: "ps" })],
+        solution: p("Period = 1 ÷ " + o.f + " GHz = " + period + " ps. Logic delay ≤ " + period + " − " + o.cq + " − " + o.su + " = <strong>" + maxc + " ps</strong>")
+      };
+    }
+  ]);
 
   function fsmSvg(trans) {
-    var pos = [[90, 70], [290, 70], [290, 230], [90, 230]], r = 26, out = [];
-    var grouped = {};
+    var pos = [[90, 70], [290, 70], [290, 230], [90, 230]], r = 26, out = [], grouped = {};
     trans.forEach(function (t) { var k = t.from + "-" + t.to; (grouped[k] = grouped[k] || []).push(t.input + "/" + t.out); });
     Object.keys(grouped).forEach(function (k) {
       var a = +k.split("-")[0], b = +k.split("-")[1], label = grouped[k].join(", ");
       if (a === b) {
         var cx = pos[a][0], cy = pos[a][1], dx = cx < 190 ? -1 : 1, dy = cy < 150 ? -1 : 1;
-        var x1 = cx + dx * r * 0.7, y1 = cy + dy * r * 0.7;
         out.push("<path d=\"M" + (cx + dx * r) + " " + cy + " C " + (cx + dx * 75) + " " + (cy + dy * 10) + ", " + (cx + dx * 10) + " " + (cy + dy * 75) + ", " + cx + " " + (cy + dy * r) + "\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" marker-end=\"url(#arr)\"/>");
-        out.push("<text class=\"fsm-label\" x=\"" + (cx + dx * 58) + "\" y=\"" + (cy + dy * 58) + "\" text-anchor=\"middle\" font-size=\"13\" fill=\"currentColor\">" + label + "</text>");
+        out.push("<text class=\"fsm-label\" x=\"" + (cx + dx * 52) + "\" y=\"" + (cy + dy * 52) + "\" text-anchor=\"middle\" font-size=\"13\" fill=\"currentColor\">" + label + "</text>");
         return;
       }
       var ax = pos[a][0], ay = pos[a][1], bx = pos[b][0], by = pos[b][1];
       var mx = (ax + bx) / 2, my = (ay + by) / 2, vx = bx - ax, vy = by - ay, len = Math.sqrt(vx * vx + vy * vy);
-      var nx = -vy / len, ny = vx / len, bend = 28, cx2 = mx + nx * bend, cy2 = my + ny * bend;
-      /* label a third of the way along the curve, so labels on crossing arrows don't collide */
+      var nx = -vy / len, ny = vx / len, cx2 = mx + nx * 28, cy2 = my + ny * 28;
       var lt = 0.32, lx = (1 - lt) * (1 - lt) * ax + 2 * (1 - lt) * lt * cx2 + lt * lt * bx, ly = (1 - lt) * (1 - lt) * ay + 2 * (1 - lt) * lt * cy2 + lt * lt * by;
-      var sx = ax + (vx / len) * r + nx * 8, sy = ay + (vy / len) * r + ny * 8, ex = bx - (vx / len) * r + nx * 8, ey = by - (vy / len) * r + ny * 8;
-      out.push("<path d=\"M" + sx + " " + sy + " Q " + cx2 + " " + cy2 + " " + ex + " " + ey + "\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" marker-end=\"url(#arr)\"/>");
+      var sx2 = ax + (vx / len) * r + nx * 8, sy = ay + (vy / len) * r + ny * 8, ex = bx - (vx / len) * r + nx * 8, ey = by - (vy / len) * r + ny * 8;
+      out.push("<path d=\"M" + sx2 + " " + sy + " Q " + cx2 + " " + cy2 + " " + ex + " " + ey + "\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" marker-end=\"url(#arr)\"/>");
       out.push("<text class=\"fsm-label\" x=\"" + (lx + nx * 14) + "\" y=\"" + (ly + ny * 14 + 4) + "\" text-anchor=\"middle\" font-size=\"13\" fill=\"currentColor\">" + label + "</text>");
     });
     pos.forEach(function (q, i) {
@@ -756,112 +1226,231 @@
     });
     return "<svg class=\"fsm\" viewBox=\"0 0 380 300\" role=\"img\" aria-label=\"State diagram\"><defs><marker id=\"arr\" viewBox=\"0 0 10 10\" refX=\"9\" refY=\"5\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto-start-reverse\"><path d=\"M0 0 L10 5 L0 10 z\" fill=\"currentColor\"/></marker></defs>" + out.join("") + "</svg>";
   }
-  G["sequential/fsm-table"] = function (R) {
-    var trans = [], fields = [], rows = [];
+  function randomFsm(R) {
+    var trans = [];
     for (var s = 0; s < 4; s++) for (var x = 0; x < 2; x++) trans.push({ from: s, input: x, to: R.int(0, 3), out: R.int(0, 1) });
-    trans.forEach(function (t, i) {
-      fields.push(bit("a" + i, t.to >> 1), bit("b" + i, t.to & 1), bit("o" + i, t.out));
-      rows.push([t.from >> 1, t.from & 1, t.input, { f: "a" + i }, { f: "b" + i }, { f: "o" + i }]);
-    });
-    return {
-      prompt: p("The state diagram below shows a finite state machine with states 0–3 and a 1-bit input. Each arrow is labelled <em>input/output</em>. States are encoded in binary as PS1 PS0.") +
-        fsmSvg(trans) + p("Complete the truth table for the next state (NS1 NS0) and the output."),
-      table: { head: ["PS1", "PS0", "In", "NS1", "NS0", "Out"], rows: rows },
-      fields: fields,
-      solution: table(["PS1", "PS0", "In", "NS1", "NS0", "Out"], trans.map(function (t) {
-        return [t.from >> 1, t.from & 1, t.input, "<strong>" + (t.to >> 1) + "</strong>", "<strong>" + (t.to & 1) + "</strong>", "<strong>" + t.out + "</strong>"];
-      }))
-    };
+    return trans;
+  }
+  G["sequential/fsm-table"] = variants([
+    function (R) {
+      var trans = randomFsm(R), fields = [], rows = [];
+      trans.forEach(function (t, i) {
+        fields.push(bit("a" + i, t.to >> 1), bit("b" + i, t.to & 1), bit("o" + i, t.out));
+        rows.push([t.from >> 1, t.from & 1, t.input, { f: "a" + i }, { f: "b" + i }, { f: "o" + i }]);
+      });
+      return {
+        prompt: p("This finite state machine has states 0–3 (encoded as PS1 PS0) and a 1-bit input. Arrows are labelled <em>input/output</em>. Complete the truth table.") + fsmSvg(trans),
+        table: { head: ["PS1", "PS0", "In", "NS1", "NS0", "Out"], rows: rows },
+        fields: fields,
+        solution: table(["PS1", "PS0", "In", "NS1", "NS0", "Out"], trans.map(function (t) { return [t.from >> 1, t.from & 1, t.input, "<strong>" + (t.to >> 1) + "</strong>", "<strong>" + (t.to & 1) + "</strong>", "<strong>" + t.out + "</strong>"]; }))
+      };
+    },
+    function (R) {
+      var trans = randomFsm(R), seq = [], s = 0, outs = [], path = [0];
+      for (var k = 0; k < 6; k++) seq.push(R.int(0, 1));
+      seq.forEach(function (x) { var t = trans[s * 2 + x]; outs.push(t.out); s = t.to; path.push(s); });
+      return {
+        prompt: p("This FSM starts in state 0. Arrows are labelled <em>input/output</em>.") + fsmSvg(trans) +
+          p("The inputs " + code(seq.join(" ")) + " arrive, one per clock cycle. What outputs are produced, and which state does it end in?"),
+        fields: [{ id: "o", label: "Outputs", kind: "bits", width: 6, answer: outs.join(""), size: 10 }, num("s", "Final state", s)],
+        solution: p("States: " + path.join(" → ") + ". Outputs: <strong>" + outs.join("") + "</strong>; final state <strong>" + s + "</strong>.")
+      };
+    }
+  ]);
+
+  G["sequential/concepts"] = function (R) {
+    return quiz(R, [
+      { q: "Which of these does NOT limit the maximum clock frequency?", o: ["Hold time", "Setup time", "clk-to-q delay", "Combinational propagation delay"], why: "Hold time constrains the shortest paths, not the clock period." },
+      { q: "A JK flip-flop with J = K = 1 will…", o: ["toggle", "reset to 0", "set to 1", "keep its value"], why: "J = K = 1 is the toggle case." },
+      { q: "Which SR flip-flop input combination is not allowed?", o: ["S = 1, R = 1", "S = 0, R = 0", "S = 1, R = 0", "S = 0, R = 1"], why: "Setting and resetting at once leaves the next state unpredictable." },
+      { q: "Loading 8 new bits into an 8-bit serial-in, serial-out register takes…", o: ["8 clock cycles", "1 clock cycle", "4 clock cycles", "16 clock cycles"], why: "One bit enters per cycle." },
+      { q: "Setup time is how long the input must be stable…", o: ["before the clock edge", "after the clock edge", "for a whole clock period", "while the clock is low"], why: "Hold time is the requirement after the edge." },
+      { q: "An FSM with 5 states needs at least how many state bits?", o: ["3", "2", "5", "4"], why: "2 bits give only 4 states." },
+      { q: "In an edge-triggered D flip-flop, the output changes…", o: ["only at the clock edge", "whenever D changes", "while the clock is high", "never"], why: "That is what makes circuits synchronous." }
+    ], 3);
   };
 
   /* ----- 6. MIPS ----- */
-  G["mips/encode"] = function (R) {
-    var i = randomInstr(R), w = encode(i);
-    return {
-      prompt: p("Encode this MIPS instruction as a 32-bit machine word in hexadecimal:") + p(code(asm(i))) +
-        p("Opcodes: R-type 0, addi 8, andi 12, ori 13, lw 35, sw 43. Funct: add 32, sub 34, and 36, or 37, slt 42, sll 0, srl 2."),
-      fields: [{ id: "w", label: "Machine code", kind: "hex", answer: w, size: 14 }],
-      solution: fieldBreakdown(i) + p("Grouping the 32 bits into hex digits gives <strong>" + hex(w, 8) + "</strong>.")
-    };
-  };
+  G["mips/encode"] = variants([
+    function (R) {
+      var i = randomInstr(R), w = encode(i);
+      return {
+        prompt: p("Encode " + code(asm(i)) + " as a 32-bit machine word in hexadecimal.") + p(OPCODE_NOTE),
+        fields: [{ id: "w", label: "Machine code", kind: "hex", answer: w, size: 14 }],
+        solution: fieldBreakdown(i) + p("Grouping the bits into hex digits: <strong>" + hex(w, 8) + "</strong>")
+      };
+    },
+    function (R) {
+      var i = randomInstr(R), f = MIPS[i.m], isR = f.fmt === "R3" || f.fmt === "SH", fields = [choice("fmt", "Format", ["R", "I", "J"], isR ? "R" : "I"), num("op", "op", isR ? 0 : f.op), num("rs", "rs", i.rs), num("rt", "rt", i.rt)];
+      if (isR) fields.push(num("rd", "rd", i.rd), num("sh", "shamt", i.shamt), num("fn", "funct", f.funct));
+      else fields.push(num("im", "immediate", i.imm));
+      return {
+        prompt: p("Give the instruction format and the decimal value of each field of " + code(asm(i)) + ".") + p(OPCODE_NOTE + " Registers: $v0–$v1 = 2–3, $a0–$a3 = 4–7, $t0–$t7 = 8–15, $s0–$s7 = 16–23, $sp = 29."),
+        fields: fields, solution: fieldBreakdown(i)
+      };
+    }
+  ]);
 
   G["mips/decode"] = function (R) {
     var i = randomInstr(R), w = encode(i), f = MIPS[i.m].fmt, fields = [choice("m", "Instruction", MNEMONICS, i.m)];
     if (f === "R3") fields.push({ id: "rd", label: "rd", kind: "reg", answer: i.rd }, { id: "rs", label: "rs", kind: "reg", answer: i.rs }, { id: "rt", label: "rt", kind: "reg", answer: i.rt });
     else if (f === "SH") fields.push({ id: "rd", label: "rd", kind: "reg", answer: i.rd }, { id: "rt", label: "rt", kind: "reg", answer: i.rt }, num("sh", "shamt", i.shamt));
-    else fields.push({ id: "rt", label: "rt", kind: "reg", answer: i.rt }, { id: "rs", label: "rs", kind: "reg", answer: i.rs }, num("imm", "Immediate (decimal)", i.imm));
+    else fields.push({ id: "rt", label: "rt", kind: "reg", answer: i.rt }, { id: "rs", label: "rs", kind: "reg", answer: i.rs }, num("imm", "Immediate", i.imm));
     return {
-      prompt: p("Decode the MIPS machine word " + code(hex(w, 8)) + ". Give the instruction and its operands (registers as names like " + code("$t0") + " or numbers).") +
-        p("Opcodes: R-type 0, addi 8, andi 12, ori 13, lw 35, sw 43. Funct: add 32, sub 34, and 36, or 37, slt 42, sll 0, srl 2."),
+      prompt: p("Decode " + code(hex(w, 8)) + ". Give the instruction and its operands (registers as " + code("$t0") + " or " + code("$8") + ").") + p(OPCODE_NOTE),
       fields: fields,
-      solution: p("In binary: " + code(bin(w, 32)) + ".") + fieldBreakdown(i) + p("The instruction is <strong>" + esc(asm(i)) + "</strong>.")
+      solution: p("Binary: " + code(bin(w, 32)) + ".") + fieldBreakdown(i) + p("The instruction is <strong>" + esc(asm(i)) + "</strong>")
     };
   };
 
-  G["mips/branch-target"] = function (R) {
-    var pc = (0x00400000 + 4 * R.int(4, 400)) >>> 0, v = R.int(0, 3);
-    if (v < 2) {
-      var imm = 0;
-      while (imm === 0) imm = R.int(-30, 30);
-      var target = (pc + 4 + imm * 4) >>> 0;
-      if (v === 0) return {
-        prompt: p("The instruction " + code("beq $t0, $t1, label") + " is at address " + code(hex(pc, 8)) + " and its 16-bit immediate is " + imm + ". What is the branch target address?"),
-        fields: [{ id: "a", label: "Target address", kind: "hex", answer: target, size: 14 }],
-        solution: p("Target = PC + 4 + immediate × 4 = " + hex(pc, 8) + " + 4 + " + (imm * 4) + " = <strong>" + hex(target, 8) + "</strong>.")
-      };
+  G["mips/branch-target"] = variants([
+    function (R) {
+      var pc = (0x00400000 + 4 * R.int(4, 60)) >>> 0, imm = R.until(function () { return R.int(-12, 12); }, function (x) { return x !== 0; }), t = pc + 4 + imm * 4;
       return {
-        prompt: p("A " + code("bne") + " instruction at address " + code(hex(pc, 8)) + " branches to " + code(hex(target, 8)) + ". What value goes in its 16-bit immediate field (in decimal)?"),
+        prompt: p(code("beq $t0, $t1, label") + " is at address " + code(hex(pc, 8)) + " and its immediate field is " + imm + ". What is the branch target address?"),
+        fields: [{ id: "a", label: "Target", kind: "hex", answer: t, size: 14 }],
+        solution: p("Target = PC + 4 + imm × 4 = " + hex(pc, 8) + " + 4 + " + imm * 4 + " = <strong>" + hex(t, 8) + "</strong>")
+      };
+    },
+    function (R) {
+      var pc = (0x00400000 + 4 * R.int(4, 60)) >>> 0, imm = R.until(function () { return R.int(-12, 12); }, function (x) { return x !== 0; }), t = pc + 4 + imm * 4;
+      return {
+        prompt: p("A " + code("bne") + " at address " + code(hex(pc, 8)) + " branches to " + code(hex(t, 8)) + ". What is its immediate field, in decimal?"),
         fields: [num("imm", "Immediate", imm)],
-        solution: p("Immediate = (target − (PC + 4)) ÷ 4 = (" + hex(target, 8) + " − " + hex(pc + 4, 8) + ") ÷ 4 = <strong>" + imm + "</strong>.")
+        solution: p("Immediate = (target − (PC + 4)) ÷ 4 = (" + hex(t, 8) + " − " + hex(pc + 4, 8) + ") ÷ 4 = <strong>" + imm + "</strong>")
+      };
+    },
+    function (R) {
+      var pc = (0x00400000 + 4 * R.int(4, 400)) >>> 0, field = (0x0100000 + 4 * R.int(0, 0x3fff)) >>> 0, jt = (((pc + 4) & 0xf0000000) | (field << 2)) >>> 0;
+      return R.chance(0.5) ? {
+        prompt: p("A " + code("j") + " instruction at " + code(hex(pc, 8)) + " has 26-bit address field " + code(hex(field, 7)) + ". What is the jump target?"),
+        fields: [{ id: "a", label: "Target", kind: "hex", answer: jt, size: 14 }],
+        solution: p("Target = upper 4 bits of PC + 4, then the 26-bit field, then 00 — that is, the field × 4: <strong>" + hex(jt, 8) + "</strong>")
+      } : {
+        prompt: p("A " + code("j") + " instruction at " + code(hex(pc, 8)) + " jumps to " + code(hex(jt, 8)) + ". What is its 26-bit address field, in hex?"),
+        fields: [{ id: "a", label: "Address field", kind: "hex", answer: field, size: 14 }],
+        solution: p("Drop the top 4 bits and divide by 4: <strong>" + hex(field, 7) + "</strong>")
       };
     }
-    var field = (0x0100000 + R.int(0, 0xffff)) >>> 0, jt = (((pc + 4) & 0xf0000000) | (field << 2)) >>> 0;
-    if (v === 2) return {
-      prompt: p("A " + code("j") + " instruction at address " + code(hex(pc, 8)) + " has 26-bit address field " + code(hex(field, 7)) + ". What is the jump target address?"),
-      fields: [{ id: "a", label: "Target address", kind: "hex", answer: jt, size: 14 }],
-      solution: p("Target = upper 4 bits of PC + 4, then the 26-bit field, then 00: (" + hex((pc + 4) & 0xf0000000, 8) + ") | (" + hex(field, 7) + " × 4) = <strong>" + hex(jt, 8) + "</strong>.")
-    };
-    return {
-      prompt: p("A " + code("j") + " instruction at address " + code(hex(pc, 8)) + " jumps to " + code(hex(jt, 8)) + ". What is its 26-bit address field, in hexadecimal?"),
-      fields: [{ id: "a", label: "Address field", kind: "hex", answer: field, size: 14 }],
-      solution: p("Drop the upper 4 bits and the low 2 bits: " + hex(jt, 8) + " ÷ 4, keeping 26 bits = <strong>" + hex(field, 7) + "</strong>.")
-    };
-  };
+  ]);
 
-  G["mips/c-to-mips"] = function (R) {
-    var regs = R.shuffle(["$s0", "$s1", "$s2", "$s3", "$s4"]), A = regs[0], i = regs[1], x = regs[2], y = regs[3];
-    var t = R.pick(["$t0", "$t1", "$t2"]), v = R.int(0, 3), k = R.int(1, 6);
-    var mn = ["lw", "sw", "add", "addi", "sll", "slt"];
-    var ctx = "Assume " + code("A") + " is an array of ints (4 bytes each) whose base address is in " + code(A) + ".";
-    if (v === 0 || v === 1) {
-      var load = v === 0, idx = R.chance(0.5) ? 0 : k;
-      var cline = load ? "x = A[i" + (idx ? " + " + idx : "") + "];" : "A[i" + (idx ? " + " + idx : "") + "] = x;";
+  var MN = ["lw", "sw", "add", "addi", "sll", "slt", "beq", "bne", "j"];
+  G["mips/c-to-mips"] = variants([
+    function (R) {
+      var regs = R.shuffle(["$s0", "$s1", "$s2", "$s3", "$s4"]), A = regs[0], i = regs[1], x = regs[2], t = R.pick(["$t0", "$t1"]);
+      var load = R.chance(0.5), idx = R.chance(0.5) ? 0 : R.int(1, 5), cl = load ? "x = A[i" + (idx ? " + " + idx : "") + "];" : "A[i" + (idx ? " + " + idx : "") + "] = x;";
       return {
-        prompt: p(ctx + " Variable " + code("i") + " is in " + code(i) + " and " + code("x") + " is in " + code(x) + ". Fill in the blanks to translate:") + pre([cline]),
+        prompt: p("Array A holds 4-byte ints; its base address is in " + code(A) + ", i is in " + code(i) + " and x is in " + code(x) + ". Fill in the blanks to translate:") + pre([cl]),
         code: [["sll " + t + ", " + i + ", ", { f: "sh" }], ["add " + t + ", " + A + ", " + t], [{ f: "op" }, " " + x + ", ", { f: "off" }, "(" + t + ")"]],
-        fields: [num("sh", "shift", 2, { size: 4 }), choice("op", "", mn, load ? "lw" : "sw"), num("off", "offset", 4 * idx, { size: 4 })],
-        solution: pre(["sll " + t + ", " + i + ", 2      # " + t + " = i × 4", "add " + t + ", " + A + ", " + t + "    # address of A[i]", (load ? "lw " : "sw ") + x + ", " + (4 * idx) + "(" + t + ")" + (idx ? "     # + " + idx + " ints = " + 4 * idx + " bytes" : "")]) +
-          p("Indexes are scaled by 4 because each int is 4 bytes; a constant offset of " + idx + " element" + (idx === 1 ? "" : "s") + " becomes " + 4 * idx + " bytes in the " + (load ? "lw" : "sw") + ".")
+        fields: [num("sh", "shift amount", 2, { size: 3 }), choice("op", "instruction", MN, load ? "lw" : "sw"), num("off", "offset", 4 * idx, { size: 3 })],
+        solution: pre(["sll " + t + ", " + i + ", 2      # i × 4", "add " + t + ", " + A + ", " + t + "    # &A[i]", (load ? "lw " : "sw ") + x + ", " + 4 * idx + "(" + t + ")"]) + p("Each int is 4 bytes, so indexes are multiplied by 4 (shift left 2) and a constant +" + idx + " becomes an offset of " + 4 * idx + ".")
       };
-    }
-    if (v === 2) {
+    },
+    function (R) {
+      var r = R.shuffle(["$s3", "$s4", "$s5", "$s6", "$s7"]), I = r[0], K = r[1], S = r[2], ne = R.chance(0.5), step = R.pick([1, 1, 2]);
       return {
-        prompt: p(ctx + " Variable " + code("x") + " is in " + code(x) + ". Fill in the blanks to translate:") + pre(["x = A[" + k + "] + " + (k * 3) + ";"]),
-        code: [[{ f: "op1" }, " " + t + ", ", { f: "off" }, "(" + A + ")"], [{ f: "op2" }, " " + x + ", " + t + ", " + (k * 3)]],
-        fields: [choice("op1", "", mn, "lw"), num("off", "offset", 4 * k, { size: 4 }), choice("op2", "", mn, "addi")],
-        solution: pre(["lw " + t + ", " + 4 * k + "(" + A + ")    # A[" + k + "] is " + 4 * k + " bytes from the base", "addi " + x + ", " + t + ", " + k * 3])
+        prompt: p("Translate the loop below; i is in " + code(I) + ", k in " + code(K) + " and the base address of save[] (4-byte ints) in " + code(S) + ". Fill in the blanks.") +
+          pre(["while (save[i] " + (ne ? "!=" : "==") + " k)", "    i += " + step + ";"]),
+        code: [["Loop: sll  $t1, " + I + ", ", { f: "sh" }], ["      add  $t1, $t1, " + S], ["      lw   $t0, 0($t1)"], ["      ", { f: "br" }, "  $t0, " + K + ", Exit"], ["      addi " + I + ", " + I + ", ", { f: "st" }], ["      ", { f: "jj" }, "    Loop"], ["Exit:"]],
+        fields: [num("sh", "shift amount", 2, { size: 3 }), choice("br", "branch", MN, ne ? "beq" : "bne"), num("st", "step", step, { size: 3 }), choice("jj", "jump", MN, "j")],
+        solution: p("The loop must exit when the condition fails, so the branch tests the opposite: " + code(ne ? "beq" : "bne") + ". The index is scaled by 4 (" + code("sll … 2") + "), i grows by " + step + ", and " + code("j Loop") + " goes back to the test.")
+      };
+    },
+    function (R) {
+      var r = R.shuffle(["$s0", "$s1", "$s2", "$s3"]), F = r[0], Gg = r[1], H = r[2], a = R.int(1, 3), b = R.int(2, 9);
+      return {
+        prompt: p("f, g and h are in " + code(F) + ", " + code(Gg) + " and " + code(H) + ". Fill in the blanks to translate:") + pre(["f = (g << " + a + ") + (h - " + b + ");"]),
+        code: [["sll  $t0, " + Gg + ", ", { f: "a" }], ["addi $t1, " + H + ", ", { f: "b" }], [{ f: "op" }, "  " + F + ", $t0, $t1"]],
+        fields: [num("a", "shift amount", a, { size: 3 }), num("b", "immediate", -b, { size: 4 }), choice("op", "instruction", MN, "add")],
+        solution: pre(["sll  $t0, " + Gg + ", " + a, "addi $t1, " + H + ", " + -b + "    # MIPS has no subi: add a negative immediate", "add  " + F + ", $t0, $t1"])
+      };
+    },
+    function (R) {
+      var r = R.shuffle(["$s0", "$s1", "$s2", "$s3"]), A = r[0], B = r[1], X = r[2];
+      return {
+        prompt: p("a, b and x are in " + code(A) + ", " + code(B) + " and " + code(X) + ". Translate without a branch by filling in the blanks:") + pre(["x = (a < b) ? 1 : 0;"]),
+        code: [[{ f: "op" }, " " + X + ", ", { f: "r1" }, ", ", { f: "r2" }]],
+        fields: [choice("op", "instruction", MN, "slt"), { id: "r1", label: "first operand", kind: "reg", answer: REGS.indexOf(A), size: 5 }, { id: "r2", label: "second operand", kind: "reg", answer: REGS.indexOf(B), size: 5 }],
+        solution: pre(["slt " + X + ", " + A + ", " + B]) + p(code("slt rd, rs, rt") + " sets rd to 1 exactly when rs < rt.")
       };
     }
+  ]);
+
+  G["mips/trace"] = variants([
+    function (R) {
+      var regs = ["$t0", "$t1", "$t2", "$t3"], v, lines, dst, init;
+      R.until(function () {
+        v = { $t0: R.int(1, 12), $t1: R.int(1, 12), $t2: 0, $t3: 0 }; lines = []; dst = "$t2";
+        init = code("$t0") + " = " + v.$t0 + " and " + code("$t1") + " = " + v.$t1;
+        var okRun = true, n = R.int(3, 4);
+        for (var k = 0; k < n; k++) {
+          var op = R.pick(["add", "sub", "and", "or", "sll", "srl", "slt", "addi"]), d = R.pick(["$t1", "$t2", "$t3"]), a = R.pick(regs), b = R.pick(regs);
+          if (op === "sll" || op === "srl") {
+            var sh = R.int(1, 3); if (v[a] < 0) okRun = false;
+            lines.push(op + " " + d + ", " + a + ", " + sh); v[d] = op === "sll" ? (v[a] << sh) : (v[a] >>> sh);
+          }
+          else if (op === "addi") { var im = R.int(-8, 10); lines.push("addi " + d + ", " + a + ", " + im); v[d] = v[a] + im; }
+          else {
+            lines.push(op + " " + d + ", " + a + ", " + b);
+            v[d] = op === "add" ? v[a] + v[b] : op === "sub" ? v[a] - v[b] : op === "and" ? v[a] & v[b] : op === "or" ? v[a] | v[b] : (v[a] < v[b] ? 1 : 0);
+          }
+          dst = d;
+        }
+        return okRun;
+      }, function (ok) { return ok && Math.abs(v[dst]) <= 200; });
+      return {
+        prompt: p("Initially " + init + " (all other registers are 0). What does " + code(dst) + " hold after this code runs? Give the value in decimal.") + pre(lines),
+        fields: [num("v", dst, v[dst])],
+        solution: p("Work through the instructions one at a time, tracking every register. " + code(dst) + " ends up holding <strong>" + v[dst] + "</strong>.")
+      };
+    },
+    function (R) {
+      var x = R.int(1, 255), count = 0, y = x;
+      while (y) { y >>>= 1; count++; }
+      return {
+        prompt: p("The word at the address in " + code("$s0") + " holds " + x + ". What is in " + code("$s1") + " when this code reaches Exit?") +
+          pre(["      add  $s1, $zero, $zero", "      lw   $t2, 0($s0)", "Loop: beq  $t2, $zero, Exit", "      srl  $t2, $t2, 1", "      addi $s1, $s1, 1", "      j    Loop", "Exit:"]),
+        fields: [num("v", "$s1", count)],
+        solution: p(x + " = " + x.toString(2) + " in binary. Each iteration shifts out one bit until the value is 0, so the loop runs once per significant bit: <strong>" + count + "</strong>.")
+      };
+    },
+    function (R) {
+      var a = R.int(1, 15), sh = R.int(1, 4), left = R.chance(0.6), r = left ? a << sh : a >>> sh, op = left ? "sllv" : "srlv";
+      return {
+        prompt: p(code(op + " $t2, $t4, $t5") + " means " + code("$t2 = $t4 " + (left ? "<<" : ">>") + " $t5") + ". If " + code("$t4") + " = " + a + " and " + code("$t5") + " = " + sh + ", what is in " + code("$t2") + "?"),
+        fields: [num("v", "$t2", r)],
+        solution: p(a + " " + (left ? "<<" : ">>") + " " + sh + " = " + a + (left ? " × " : " ÷ ") + Math.pow(2, sh) + (left ? "" : " (rounded down)") + " = <strong>" + r + "</strong>")
+      };
+    }
+  ]);
+
+  G["mips/endianness"] = function (R) {
+    var n = R.pick([4, 4, 6]), bytes = [];
+    for (var i = 0; i < n; i++) bytes.push(R.int(0, 255));
+    var little = R.chance(0.5), base = R.pick([0x1000, 0x2000, 0x8000]), word = bytes.map(function (b) { return hex(b, 2).slice(2); }).join("");
+    var mem = little ? bytes.slice().reverse() : bytes.slice();
     return {
-      prompt: p("Variables " + code("a") + ", " + code("b") + " and " + code("x") + " are in " + code(i) + ", " + code(y) + " and " + code(x) + ". Fill in the blanks to translate:") +
-        pre(["if (a < b) x = 1;", "else       x = 0;"]),
-      code: [[{ f: "op" }, " " + x + ", ", { f: "r1" }, ", ", { f: "r2" }]],
-      fields: [choice("op", "", mn, "slt"), { id: "r1", label: "", kind: "reg", answer: REGS.indexOf(i), size: 5 }, { id: "r2", label: "", kind: "reg", answer: REGS.indexOf(y), size: 5 }],
-      solution: pre(["slt " + x + ", " + i + ", " + y + "    # x = 1 if a < b, else 0"]) + p(code("slt rd, rs, rt") + " sets rd to 1 exactly when rs < rt, so no branch is needed.")
+      prompt: p("The " + (n * 8) + "-bit value " + code("0x" + word) + " is stored at address " + code(hex(base, 4)) + " in <strong>" + (little ? "little" : "big") + "-endian</strong> order. Which byte is at each address?"),
+      table: { head: ["Address", "Byte"], rows: mem.map(function (b, k) { return [hex(base + k, 4), { f: "b" + k }]; }) },
+      fields: mem.map(function (b, k) { return { id: "b" + k, label: "Byte at " + hex(base + k, 4), kind: "hex", answer: b, size: 5 }; }),
+      solution: p((little ? "Little-endian stores the least significant byte first" : "Big-endian stores the most significant byte first") + ": " + mem.map(function (b) { return "<strong>" + hex(b, 2) + "</strong>"; }).join(", "))
     };
   };
 
-  /* ----- 7. Datapath and control ----- */
+  G["mips/concepts"] = function (R) {
+    return quiz(R, [
+      { q: "Which field appears in every MIPS instruction format?", o: ["opcode", "rs", "rd", "immediate"], why: "J-type instructions have only an opcode and an address." },
+      { q: "How many instruction formats does MIPS have?", o: ["3", "2", "4", "More than 10"], why: "R-type, I-type and J-type." },
+      { q: "Where does jal put the return address?", o: ["$ra", "$sp", "$v0", "$a0"], why: "jr $ra returns to it." },
+      { q: "Local variables of a function call are stored in…", o: ["the stack", "the heap", "the static data segment", "the text segment"], why: "Each call gets a stack frame." },
+      { q: "Memory allocated with malloc comes from…", o: ["the heap", "the stack", "the text segment", "registers"], why: "The heap holds dynamically allocated data." },
+      { q: "Branch offsets in MIPS are counted in…", o: ["words, relative to PC + 4", "bytes, relative to PC", "words, from address 0", "bytes, relative to PC + 4"], why: "Target = PC + 4 + offset × 4." },
+      { q: "Why does loading a 32-bit constant take two instructions (lui and ori)?", o: ["Immediates are only 16 bits", "Registers are 16 bits", "ori can only set one bit", "Constants live in memory"], why: "Each I-type immediate field has 16 bits." },
+      { q: "lw uses which instruction format?", o: ["I-type", "R-type", "J-type", "It has its own format"], why: "The offset is the immediate field." }
+    ], 3);
+  };
+
+  /* ----- 7. Datapath ----- */
   var CONTROL = {
     add: ["+4", "rd", "x", "rt", "add", "0", "ALU", "1"], sub: ["+4", "rd", "x", "rt", "sub", "0", "ALU", "1"],
     and: ["+4", "rd", "x", "rt", "and", "0", "ALU", "1"], or: ["+4", "rd", "x", "rt", "or", "0", "ALU", "1"],
@@ -871,25 +1460,28 @@
   };
   var SIGNALS = [["nPC_sel", ["+4", "br"]], ["RegDst", ["rd", "rt", "x"]], ["ExtOp", ["signed", "zero", "x"]], ["ALUSrc", ["rt", "imm"]],
     ["ALUctr", ["add", "sub", "and", "or", "slt"]], ["MemWr", ["0", "1"]], ["MemtoReg", ["ALU", "memory", "x"]], ["RegWr", ["0", "1"]]];
-  function sampleOf(m) {
-    return { add: "add $t0, $t1, $t2", sub: "sub $s1, $s2, $s3", and: "and $t3, $t4, $t5", or: "or $s0, $s1, $t0", slt: "slt $t2, $s0, $s1",
-      addi: "addi $t0, $t1, -12", ori: "ori $s2, $s3, 255", lw: "lw $t1, 8($s0)", sw: "sw $t2, 16($sp)", beq: "beq $t0, $t1, loop", j: "j loop" }[m];
-  }
-  G["datapath/control-signals"] = function (R) {
-    var m = R.pick(Object.keys(CONTROL)), vals = CONTROL[m];
-    return {
-      prompt: p("For the single-cycle MIPS datapath from lecture, give the value of every control signal while executing:") + p(code(sampleOf(m))) +
-        p("Choose x where the value does not matter (any value is accepted there)."),
-      fields: SIGNALS.map(function (s, k) { return choice("c" + k, s[0], s[1].indexOf("x") === -1 && vals[k] === "x" ? s[1].concat(["x"]) : s[1], vals[k], { any: vals[k] === "x" }); }),
-      solution: table(SIGNALS.map(function (s) { return s[0]; }), [vals.map(function (v) { return "<strong>" + v + "</strong>"; })]) +
-        p({ lw: "Loads use the sign-extended immediate as an address offset, read memory, and write the result to rt.",
-          sw: "Stores compute an address like loads but write memory and no register, so RegDst and MemtoReg do not matter.",
-          beq: "Branches subtract the registers to compare them and select the branch target; nothing is written.",
-          addi: "addi adds the sign-extended immediate and writes the result to rt.",
-          ori: "ori uses a zero-extended immediate (it is a logical operation) and writes to rt." }[m] ||
-          "R-type instructions use two registers as ALU inputs and write the ALU result to rd; no immediate is used.")
-    };
-  };
+  var SAMPLE = { add: "add $t0, $t1, $t2", sub: "sub $s1, $s2, $s3", and: "and $t3, $t4, $t5", or: "or $s0, $s1, $t0", slt: "slt $t2, $s0, $s1",
+    addi: "addi $t0, $t1, -12", ori: "ori $s2, $s3, 255", lw: "lw $t1, 8($s0)", sw: "sw $t2, 16($sp)", beq: "beq $t0, $t1, loop", j: "j loop" };
+  G["datapath/control-signals"] = variants([
+    function (R) {
+      var m = R.pick(Object.keys(CONTROL)), vals = CONTROL[m];
+      return {
+        prompt: p("For the single-cycle MIPS datapath from lecture, give every control signal while executing " + code(SAMPLE[m]) + ". Pick x where the value does not matter (any value is accepted there)."),
+        fields: SIGNALS.map(function (s, k) { return choice("c" + k, s[0], s[1].indexOf("x") === -1 && vals[k] === "x" ? s[1].concat(["x"]) : s[1], vals[k], { any: vals[k] === "x" }); }),
+        solution: table(SIGNALS.map(function (s) { return s[0]; }), [vals.map(function (v) { return "<strong>" + v + "</strong>"; })])
+      };
+    },
+    function (R) {
+      var keys = R.shuffle(Object.keys(CONTROL)), m = keys[0], vals = CONTROL[m], opts = [m];
+      var differs = function (a, b) { return CONTROL[a].some(function (v, k) { var w = CONTROL[b][k]; return v !== "x" && w !== "x" && v !== w; }); };
+      keys.slice(1).forEach(function (k) { if (opts.length < 4 && differs(k, m)) opts.push(k); });
+      return {
+        prompt: p("Which instruction is being executed when the control signals have these values? (x means the value does not matter.)") + table(SIGNALS.map(function (s) { return s[0]; }), [vals]),
+        fields: [choice("m", "Instruction", R.shuffle(opts), m)],
+        solution: p("<strong>" + m + "</strong> (for example " + code(SAMPLE[m]) + "). The other options differ in at least one signal that matters.")
+      };
+    }
+  ]);
   var STAGES = { add: [1, 1, 1, 0, 1], addi: [1, 1, 1, 0, 1], lw: [1, 1, 1, 1, 1], sw: [1, 1, 1, 1, 0], beq: [1, 1, 1, 0, 0], j: [1, 1, 0, 0, 0] };
   var WRITES = { add: "rd", addi: "rt", lw: "rt", sw: "none", beq: "none", j: "none" };
   G["datapath/datapath-trace"] = function (R) {
@@ -897,50 +1489,58 @@
     var fields = names.map(function (n, k) { return choice("s" + k, n, ["used", "not used"], st[k] ? "used" : "not used"); });
     fields.push(choice("w", "Register written", ["rd", "rt", "none"], WRITES[m]));
     return {
-      prompt: p("Which of the five datapath stages does this instruction use, and which register field (if any) is written?") + p(code(sampleOf(m))),
+      prompt: p("Which datapath stages does " + code(SAMPLE[m]) + " use, and which register field (if any) does it write?"),
       fields: fields,
-      solution: table(["IF", "ID", "EX", "MEM", "WB", "Writes"], [st.map(function (u) { return u ? "used" : "—"; }).concat([WRITES[m]])]) +
-        p({ add: "R-type: no memory access; the ALU result is written to rd.", addi: "Like R-type, but the result goes to rt.",
-          lw: "Loads use all five stages and write the loaded value to rt.", sw: "Stores write memory and no register, so write back is unused.",
-          beq: "Branches compare in the ALU and update the PC; they neither access memory nor write a register.",
-          j: "Jumps only need the instruction itself to compute the new PC." }[m])
+      solution: table(["IF", "ID", "EX", "MEM", "WB", "Writes"], [st.map(function (u) { return u ? "used" : "—"; }).concat([WRITES[m]])])
     };
   };
-  G["datapath/clock-cycle"] = function (R) {
-    var names = ["IF", "ID", "EX", "MEM", "WB"], t, mx, tries = 0;
-    do {
-      t = names.map(function () { return R.int(2, 8) * 50; });
-      mx = Math.max.apply(null, t);
-    } while (t.filter(function (x) { return x === mx; }).length > 1 && ++tries < 50);
-    var total = t.reduce(function (a, b) { return a + b; }, 0), slow = names[t.indexOf(mx)];
-    var rest = Math.max.apply(null, t.filter(function (x, k) { return k !== t.indexOf(mx); })), split = Math.max(rest, mx / 2);
-    return {
-      prompt: p("The stages of a MIPS datapath take:") + table(names, [t.map(function (x) { return x + " ps"; })]) +
-        p("R-type instructions skip MEM, stores skip WB, branches skip MEM and WB, and loads use every stage.") +
-        p("What is the minimum clock cycle with single-cycle clocking, and with multi-cycle clocking? If one stage could be split into two equal halves, which should it be, and what would the multi-cycle clock cycle become?"),
-      fields: [num("s", "Single-cycle", total, { suffix: "ps" }), num("m", "Multi-cycle", mx, { suffix: "ps" }),
-        choice("st", "Stage to split", names, slow), num("n", "New multi-cycle", split, { suffix: "ps" })],
-      solution: p("Single-cycle: the clock must fit the slowest instruction, a load, which uses every stage: " + t.join(" + ") + " = <strong>" + total + " ps</strong>.") +
-        p("Multi-cycle: the clock must fit the slowest stage, " + slow + ": <strong>" + mx + " ps</strong>.") +
-        p("Splitting " + slow + " gives two " + fmt(mx / 2, 1) + " ps stages; the slowest stage is then max(" + fmt(mx / 2, 1) + ", " + rest + ") = <strong>" + fmt(split, 1) + " ps</strong>.")
-    };
+  G["datapath/clock-cycle"] = variants([
+    function (R) {
+      var names = ["IF", "ID", "EX", "MEM", "WB"], t = R.until(function () { return names.map(function () { return R.int(1, 6) * 50; }); }, function (a) { var mx = maxOf(a); return a.filter(function (x) { return x === mx; }).length === 1; });
+      var total = sum(t), mx = maxOf(t), slow = names[t.indexOf(mx)], rest = maxOf(t.filter(function (x, k) { return k !== t.indexOf(mx); })), split = Math.max(rest, mx / 2);
+      return {
+        prompt: p("The datapath stages take:") + table(names, [t.map(function (x) { return x + " ps"; })]) +
+          p("Loads use every stage. What is the clock cycle for single-cycle and for multi-cycle clocking? If one stage could be split into two equal halves, which one, and what would the multi-cycle clock become?"),
+        fields: [num("s", "Single-cycle", total, { suffix: "ps" }), num("m", "Multi-cycle", mx, { suffix: "ps" }), choice("st", "Stage to split", names, slow), num("n", "New multi-cycle", split, { suffix: "ps" })],
+        solution: p("Single-cycle = slowest instruction (a load) = " + t.join(" + ") + " = <strong>" + total + " ps</strong>. Multi-cycle = slowest stage, " + slow + " = <strong>" + mx + " ps</strong>.") +
+          p("Splitting " + slow + " gives two " + fmt(mx / 2, 1) + " ps halves; the clock becomes max(" + fmt(mx / 2, 1) + ", " + rest + ") = <strong>" + fmt(split, 1) + " ps</strong>")
+      };
+    },
+    function (R) {
+      var names = ["IF", "ID", "EX", "WB"], t = names.map(function () { return R.int(1, 5) * 50; }), use = { "R-type": [1, 1, 1, 1], "Branch": [1, 1, 1, 0], "Jump": [1, 1, 0, 0] };
+      var times = Object.keys(use).map(function (k) { return sum(t.filter(function (_, i) { return use[k][i]; })); });
+      return {
+        prompt: p("A 4-stage datapath (no memory stage) has these stage times and instruction types:") +
+          table(["Instr.", "IF", "ID", "EX", "WB"], Object.keys(use).map(function (k) { return [k].concat(t.map(function (x, i) { return use[k][i] ? x + " ps" : "—"; })); })) +
+          p("What is the minimum clock cycle with single-cycle clocking, and with multi-cycle clocking?"),
+        fields: [num("s", "Single-cycle", maxOf(times), { suffix: "ps" }), num("m", "Multi-cycle", maxOf(t), { suffix: "ps" })],
+        solution: p("Single-cycle = the slowest instruction = <strong>" + maxOf(times) + " ps</strong> (R-type: " + t.join(" + ") + "). Multi-cycle = the slowest stage = <strong>" + maxOf(t) + " ps</strong>.")
+      };
+    },
+    function (R) {
+      var t = R.pick([100, 200, 250]), mix = percentSplit(R, 4, 10), cyc = [4, 5, 4, 3], names = ["R-type (4 stages)", "Load (5 stages)", "Store (4 stages)", "Branch (3 stages)"];
+      var cpi = sum(mix.map(function (f, i) { return f / 100 * cyc[i]; })), multi = cpi * t, single = 5 * t, faster = multi < single ? "multi-cycle" : "single-cycle";
+      return {
+        prompt: p("Every stage of a 5-stage datapath takes " + t + " ps. A program has this instruction mix:") + table(["Class", "Frequency"], names.map(function (n, i) { return [n, mix[i] + "%"]; })) +
+          p("With multi-cycle clocking (one stage per cycle), what is the average CPI and the average time per instruction? Which design is faster, given that single-cycle clocking needs " + 5 * t + " ps per instruction?"),
+        fields: [num("c", "Average CPI", round(cpi, 2)), num("t", "Time per instruction", round(multi, 2), { suffix: "ps" }), choice("w", "Faster design", ["multi-cycle", "single-cycle"], faster)],
+        solution: p("CPI = " + mix.map(function (f, i) { return fmt(f / 100, 1) + " × " + cyc[i]; }).join(" + ") + " = <strong>" + fmt(cpi) + "</strong>; time = " + fmt(cpi) + " × " + t + " = <strong>" + fmt(multi) + " ps</strong>, versus " + single + " ps single-cycle: <strong>" + faster + "</strong> is faster.")
+      };
+    }
+  ]);
+  G["datapath/concepts"] = function (R) {
+    return quiz(R, [
+      { q: "In a single-cycle datapath, the clock period is set by…", o: ["the slowest instruction", "the fastest instruction", "the slowest stage", "the register file alone"], why: "Every instruction must finish in one cycle." },
+      { q: "Which stage reads or writes data memory?", o: ["MEM", "ID", "EX", "WB"], why: "Only loads and stores use it." },
+      { q: "Which of these does NOT happen in the ID stage?", o: ["The ALU computes the result", "The instruction is decoded", "Source registers are read", "The immediate is sign-extended"], why: "The ALU works in EX." },
+      { q: "ExtOp chooses between…", o: ["sign- and zero-extension of the immediate", "the two ALU inputs", "the next PC values", "reading and writing memory"], why: "addi needs sign extension; ori needs zero extension." },
+      { q: "MemtoReg chooses…", o: ["whether the register write data comes from the ALU or memory", "whether memory is written", "which register is written", "the ALU operation"], why: "Loads write memory data; ALU instructions write the ALU result." },
+      { q: "Which instruction does not write a register?", o: ["sw", "lw", "addi", "slt"], why: "Stores only write memory." },
+      { q: "Why is a single-cycle design inefficient?", o: ["Every instruction takes as long as the slowest one", "It needs more registers", "It cannot run branches", "It needs two memories"], why: "Fast instructions wait out the long clock." }
+    ], 3);
   };
 
   /* ----- 8. Pipelining ----- */
-  G["pipelining/pipeline-time"] = function (R) {
-    var names = ["IF", "ID", "EX", "MEM", "WB"], t = names.map(function () { return R.int(2, 6) * 50; });
-    var n = R.pick([5, 10, 20, 100, 1000]), total = t.reduce(function (a, b) { return a + b; }, 0), mx = Math.max.apply(null, t);
-    var single = n * total, piped = (5 + n - 1) * mx, sp = single / piped;
-    return {
-      prompt: p("A 5-stage datapath has these stage times:") + table(names, [t.map(function (x) { return x + " ps"; })]) +
-        p("A program runs " + n + " instructions with no hazards. How long does it take on a pipelined processor (clocked at the slowest stage), and what is the speedup over a single-cycle processor?"),
-      fields: [num("t", "Pipelined time", piped, { suffix: "ps" }), num("sp", "Speedup", round(sp, 2), { tol: 0.01 })],
-      solution: p("Pipelined: (5 + " + n + " − 1) cycles × " + mx + " ps = <strong>" + piped + " ps</strong>.") +
-        p("Single-cycle: " + n + " × " + total + " ps = " + single + " ps.") +
-        p("Speedup = " + single + " ÷ " + piped + " = <strong>" + fmt(sp) + "</strong>" + (n >= 100 ? " (close to " + total + " ÷ " + mx + " = " + fmt(total / mx) + " for long programs)." : "."))
-    };
-  };
-
   function randomDepCode(R, n, pool) {
     var ins = [];
     for (var k = 0; k < n; k++) {
@@ -954,143 +1554,324 @@
     return ins;
   }
   function numbered(ins) { return pre(ins.map(function (i, k) { return (k + 1) + ": " + i.text; })); }
-  G["pipelining/dependencies"] = function (R) {
-    var ins, deps, tries = 0, count;
-    do {
-      ins = randomDepCode(R, 5, ["$t0", "$t1", "$t2", "$s0", "$s1"]);
-      deps = findDependencies(ins);
-      count = function (t) { return deps.filter(function (d) { return d.type === t; }).length; };
-    } while ((count("RAW") === 0 || count("WAR") + count("WAW") === 0) && ++tries < 200);
-    return {
-      prompt: p("How many data dependencies of each type are in this code? Count a dependency between two instructions only when no instruction in between writes the same register. Ignore read-after-read.") + numbered(ins),
-      fields: [num("raw", "RAW (read after write)", count("RAW")), num("war", "WAR (write after read)", count("WAR")), num("waw", "WAW (write after write)", count("WAW"))],
-      solution: (deps.length ? ul(deps.map(function (d) { return "<strong>" + d.type + "</strong> on " + code(d.reg) + ": " + (d.from + 1) + " → " + (d.to + 1); })) : p("No dependencies.")) +
-        p("Totals: RAW " + count("RAW") + ", WAR " + count("WAR") + ", WAW " + count("WAW") + ".")
-    };
-  };
-  G["pipelining/stalls"] = function (R) {
-    var ins, a, b, tries = 0;
-    do {
-      ins = randomDepCode(R, 4, ["$t0", "$t1", "$t2", "$s0"]);
-      a = pipelineStalls(ins, false); b = pipelineStalls(ins, true);
-    } while ((a.stalls === 0 || (b.stalls === 0 && R.chance(0.5))) && ++tries < 200);
-    return {
-      prompt: p("This code runs on the classic 5-stage MIPS pipeline (IF ID EX MEM WB). Registers are written in the first half of a cycle and read in the second half. Forwarding, when available, delivers results to the start of EX (a loaded value is ready after MEM).") + numbered(ins) +
-        p("How many stall cycles are needed without forwarding, and with forwarding? How many cycles does the code take with forwarding?"),
-      fields: [num("nf", "Stalls without forwarding", a.stalls), num("f", "Stalls with forwarding", b.stalls), num("c", "Total cycles with forwarding", b.cycles)],
-      solution: p("Without forwarding, an instruction can read a register in ID only in the same cycle (or later) that the producer is in WB, so a dependent instruction right after its producer waits 2 cycles, and one two instructions later waits 1.") +
-        p("With forwarding, ALU results reach the next instruction in time; only a load followed immediately by a use needs 1 stall.") +
-        table(["Instruction", "ID cycle (no forwarding)", "ID cycle (forwarding)"], ins.map(function (i, k) { return [code(i.text), a.D[k], b.D[k]]; })) +
-        p("Stalls: <strong>" + a.stalls + "</strong> without forwarding, <strong>" + b.stalls + "</strong> with. Total with forwarding = 5 + " + ins.length + " − 1 + " + b.stalls + " = <strong>" + b.cycles + "</strong> cycles.")
-    };
+  var PIPE_RULES = "Classic 5-stage pipeline (IF ID EX MEM WB). Registers are written in the first half of a cycle and read in the second half. Forwarding, when present, delivers results to the start of EX (a loaded value is ready after MEM).";
+
+  G["pipelining/pipeline-time"] = variants([
+    function (R) {
+      var names = ["IF", "ID", "EX", "MEM", "WB"], t = names.map(function () { return R.int(2, 6) * 50; }), n = R.pick([5, 10, 20, 100]);
+      var total = sum(t), mx = maxOf(t), single = n * total, piped = (5 + n - 1) * mx;
+      return {
+        prompt: p("Stage times:") + table(names, [t.map(function (x) { return x + " ps"; })]) +
+          p(n + " instructions run with no hazards. How long do they take on a single-cycle processor, and on a pipelined one clocked at the slowest stage?"),
+        fields: [num("s", "Single-cycle", single, { suffix: "ps" }), num("p", "Pipelined", piped, { suffix: "ps" })],
+        solution: p("Single-cycle: " + n + " × " + total + " = <strong>" + single + " ps</strong>. Pipelined: (5 + " + n + " − 1) × " + mx + " = <strong>" + piped + " ps</strong>.")
+      };
+    },
+    function (R) {
+      var o = R.until(function () { return { s: R.pick([3, 4, 5, 6]), n: R.int(2, 20) }; }, function (x) { return exact(x.n * x.s / (x.s + x.n - 1), 2); });
+      var sp = o.n * o.s / (o.s + o.n - 1);
+      return {
+        prompt: p("A pipeline has " + o.s + " stages of equal length. What is the speedup over a non-pipelined version when processing " + o.n + " tasks?"),
+        fields: [num("sp", "Speedup", round(sp, 2))],
+        solution: p("Non-pipelined: " + o.n + " × " + o.s + " = " + o.n * o.s + " stage-times. Pipelined: " + o.s + " + " + o.n + " − 1 = " + (o.s + o.n - 1) + ". Speedup = <strong>" + fmt(sp) + "</strong> (it approaches " + o.s + " as the number of tasks grows).")
+      };
+    },
+    function (R) {
+      var n = R.int(3, 6), k = R.int(0, 3), cyc = 4 + n + k;
+      return {
+        prompt: p(n + " instructions run on a 5-stage pipeline, and hazards cause " + k + " stall cycle" + (k === 1 ? "" : "s") + ". How many cycles from the first fetch to the last write back, and what is the CPI of the sequence? (A fraction such as 7/3 is fine.)"),
+        fields: [num("c", "Cycles", cyc), num("cpi", "CPI", cyc / n, { tol: 0.005 })],
+        solution: p("Cycles = 5 + (" + n + " − 1) + " + k + " = <strong>" + cyc + "</strong>. CPI = " + cyc + "/" + n + " = <strong>" + fmt(cyc / n) + "</strong>")
+      };
+    }
+  ]);
+
+  G["pipelining/dependencies"] = variants([
+    function (R) {
+      var ins, deps;
+      R.until(function () { ins = randomDepCode(R, 5, ["$t0", "$t1", "$t2", "$s0", "$s1"]); deps = findDependencies(ins); return true; },
+        function () { var c = function (t) { return deps.filter(function (d) { return d.type === t; }).length; }; return c("RAW") > 0 && c("WAR") + c("WAW") > 0; });
+      var count = function (t) { return deps.filter(function (d) { return d.type === t; }).length; };
+      return {
+        prompt: p("Count the data dependencies of each type. Only count a dependency between two instructions when no instruction in between writes the same register; ignore read-after-read.") + numbered(ins),
+        fields: [num("raw", "RAW (read after write)", count("RAW")), num("war", "WAR (write after read)", count("WAR")), num("waw", "WAW (write after write)", count("WAW"))],
+        solution: ul(deps.map(function (d) { return "<strong>" + d.type + "</strong> on " + code(d.reg) + ": " + (d.from + 1) + " → " + (d.to + 1); }))
+      };
+    },
+    function (R) {
+      var ins, deps;
+      R.until(function () { ins = randomDepCode(R, 5, ["$t0", "$t1", "$t2", "$s0"]); deps = findDependencies(ins); return true; }, function () { return deps.some(function (d) { return d.type === "RAW"; }); });
+      var who = [];
+      deps.forEach(function (d) { if (d.type === "RAW" && who.indexOf(d.to + 1) === -1) who.push(d.to + 1); });
+      who.sort(function (a, b) { return a - b; });
+      return {
+        prompt: p("Which instructions read a register written by an earlier instruction (a RAW dependency)? List their numbers.") + numbered(ins),
+        fields: [{ id: "w", label: "Instructions", kind: "set", answer: who, size: 12 }],
+        solution: ul(deps.filter(function (d) { return d.type === "RAW"; }).map(function (d) { return "instruction " + (d.to + 1) + " reads " + code(d.reg) + " written by " + (d.from + 1); })) + p("Answer: <strong>" + who.join(", ") + "</strong>")
+      };
+    }
+  ]);
+
+  var HAZARD_CASES = [
+    { t: "lw $t0, 0($s0) is followed immediately by add $t1, $t0, $t2.", a: "data hazard" },
+    { t: "add $t3, $t1, $t2 is followed immediately by sub $t4, $t3, $t5.", a: "data hazard" },
+    { t: "One memory holds both instructions and data, and a lw reaches MEM in the same cycle another instruction is fetched.", a: "structural hazard" },
+    { t: "Two instructions need the register file in the same cycle, and it cannot read and write in one cycle.", a: "structural hazard" },
+    { t: "beq $t0, $t1, Done is fetched, but its outcome is not known until EX, so the next instruction to fetch is unknown.", a: "control hazard" },
+    { t: "add $t0, $t1, $t2 is followed by sub $t3, $t4, $t5.", a: "no hazard" },
+    { t: "lw $t0, 0($s0) is followed by sw $t1, 4($s0) (neither uses the other's registers).", a: "no hazard" },
+    { t: "j Loop is fetched, and the instruction after it in memory has already entered the pipeline.", a: "control hazard" }
+  ];
+  G["pipelining/stalls"] = variants([
+    function (R) {
+      var ins, a, b;
+      R.until(function () { ins = randomDepCode(R, 4, ["$t0", "$t1", "$t2", "$s0"]); a = pipelineStalls(ins, false); b = pipelineStalls(ins, true); return true; }, function () { return a.stalls > 0; });
+      return {
+        prompt: p(PIPE_RULES) + numbered(ins) + p("How many stall cycles are needed without forwarding, and with forwarding? How many cycles does the code take with forwarding?"),
+        fields: [num("nf", "Stalls without forwarding", a.stalls), num("f", "Stalls with forwarding", b.stalls), num("c", "Cycles with forwarding", b.cycles)],
+        solution: p("Without forwarding, a dependent instruction right after its producer waits 2 cycles, and one two instructions later waits 1. With forwarding, only a load followed immediately by a use stalls (1 cycle).") +
+          table(["Instruction", "ID cycle, no forwarding", "ID cycle, forwarding"], ins.map(function (i, k) { return [code(i.text), a.D[k], b.D[k]]; })) +
+          p("Stalls: <strong>" + a.stalls + "</strong> and <strong>" + b.stalls + "</strong>; cycles with forwarding = 5 + " + ins.length + " − 1 + " + b.stalls + " = <strong>" + b.cycles + "</strong>")
+      };
+    },
+    function (R) {
+      var cases = R.shuffle(HAZARD_CASES).slice(0, 3), opts = ["data hazard", "structural hazard", "control hazard", "no hazard"];
+      return {
+        prompt: p("What kind of hazard, if any, does each situation create in a 5-stage pipeline?"),
+        fields: cases.map(function (c, k) { return choice("h" + k, (k + 1) + ". " + c.t, opts, c.a, { wide: true }); }),
+        solution: ul(cases.map(function (c, k) { return (k + 1) + ". <strong>" + c.a + "</strong>"; })) + p("Data hazards come from dependencies, structural hazards from shared hardware, control hazards from branches and jumps."),
+        layout: "stack"
+      };
+    }
+  ]);
+  G["pipelining/concepts"] = function (R) {
+    return quiz(R, [
+      { q: "Pipelining mainly improves…", o: ["throughput", "the latency of a single instruction", "the clock-to-q delay", "the miss rate"], why: "Each instruction still passes through every stage." },
+      { q: "Ideal speedup equals the number of stages when…", o: ["stages are balanced and the pipeline stays full", "the pipeline has 5 stages", "every instruction is a load", "forwarding is disabled"], why: "Unequal stages or bubbles reduce the speedup." },
+      { q: "Which dependency never causes a hazard?", o: ["Read after read", "Read after write", "Write after read", "Write after write"], why: "Reading twice changes nothing." },
+      { q: "How does the classic MIPS pipeline avoid the register-file structural hazard?", o: ["Write in the first half of the cycle, read in the second", "Duplicate the register file", "Stall every other cycle", "Use forwarding"], why: "Both can then happen in the same cycle." },
+      { q: "Even with forwarding, which sequence needs a stall?", o: ["A load followed immediately by an instruction using its result", "Two independent adds", "An add followed by a dependent add", "A store followed by a load"], why: "The loaded value is not ready until after MEM." },
+      { q: "With branch prediction, how many nops must the compiler insert after a branch?", o: ["0", "1", "2", "It depends on the program"], why: "The hardware guesses and flushes on a misprediction." }
+    ], 3);
   };
 
-  /* ----- 9. Instruction-level parallelism ----- */
-  G["ilp/renaming"] = function (R) {
-    var regs = R.shuffle(["$t0", "$t1", "$t2", "$t3", "$t4", "$t5", "$t6"]).slice(0, 4), map = {}, next = 4, fields = [], rows = [];
+  /* ----- 9. ILP ----- */
+  function renameRun(R) {
+    var regs = R.shuffle(["$t0", "$t1", "$t2", "$t3", "$t4", "$t5", "$t6"]).slice(0, 4), map = {}, next = 4, ins = [];
     regs.forEach(function (r, k) { map[r] = "V" + k; });
-    var n = R.int(4, 5), sol = [];
+    var n = R.int(4, 5);
+    for (var k = 0; k < n; k++) {
+      var d = R.pick(regs), s1 = R.pick(regs), s2 = R.pick(regs), op = R.pick(["add", "sub", "and", "or", "xor", "addi"]), text, ren, src;
+      if (op === "addi") { var im = R.int(1, 30); text = "addi " + d + ", " + s1 + ", " + im; ren = "addi V" + next + ", " + map[s1] + ", " + im; src = [s1]; }
+      else { text = op + " " + d + ", " + s1 + ", " + s2; ren = op + " V" + next + ", " + map[s1] + ", " + map[s2]; src = s1 === s2 ? [s1] : [s1, s2]; }
+      map[d] = "V" + next; next++;
+      ins.push({ text: text, ren: ren, dst: d, src: src });
+    }
+    return { regs: regs, ins: ins, map: map };
+  }
+  G["ilp/renaming"] = variants([function (R) {
+    var regs = R.shuffle(["$t0", "$t1", "$t2", "$t3", "$t4", "$t5", "$t6"]).slice(0, 4), map = {}, next = 4, fields = [], rows = [], sol = [];
+    regs.forEach(function (r, k) { map[r] = "V" + k; });
+    var n = R.int(4, 5);
     for (var k = 0; k < n; k++) {
       var d = R.pick(regs), s1 = R.pick(regs), s2 = R.pick(regs), op = R.pick(["add", "sub", "and", "or", "xor", "addi"]), text, ren;
       if (op === "addi") { var im = R.int(1, 30); text = "addi " + d + ", " + s1 + ", " + im; ren = "addi V" + next + ", " + map[s1] + ", " + im; }
       else { text = op + " " + d + ", " + s1 + ", " + s2; ren = op + " V" + next + ", " + map[s1] + ", " + map[s2]; }
       map[d] = "V" + next; next++;
       fields.push({ id: "r" + k, label: "", kind: "text", accept: [ren], size: 20 });
-      rows.push([code(text), { f: "r" + k }]);
-      sol.push([code(text), "<strong>" + esc(ren) + "</strong>"]);
+      rows.push([code(text), { f: "r" + k }]); sol.push([code(text), "<strong>" + esc(ren) + "</strong>"]);
     }
     return {
-      prompt: p("Rename the registers in this code so that every result gets a new value name. Initially " + regs.map(function (r, k) { return code(r) + " = V" + k; }).join(", ") +
-        ". Name new results V4, V5, … in order, and write each renamed instruction (for example " + code("add V4, V0, V1") + ")."),
-      table: { head: ["Instruction", "Renamed instruction"], rows: rows },
+      prompt: p("Rename the registers so every result gets a new value name. Initially " + regs.map(function (r, k) { return code(r) + " = V" + k; }).join(", ") + ". Name new results V4, V5, … in order (for example " + code("add V4, V0, V1") + ")."),
+      table: { head: ["Instruction", "Renamed"], rows: rows },
       fields: fields,
-      solution: table(["Instruction", "Renamed"], sol) + p("Sources use the register's current value name; the destination always gets a fresh name. This removes WAR and WAW dependencies, leaving only true (RAW) ones.")
+      solution: table(["Instruction", "Renamed"], sol) + p("Sources use each register's current name; every destination gets a fresh one, which removes WAR and WAW dependencies.")
     };
-  };
-  G["ilp/unrolling"] = function (R) {
-    var n = R.pick([64, 100, 128, 200, 256, 1000]), u = R.pick([2, 4]);
-    var orig = 5 * n, unr = (3 * u + 2) * n / u;
+  }, function (R) {
+    var run = renameRun(R), deps = findDependencies(run.ins), falseDeps = deps.filter(function (d) { return d.type !== "RAW"; }).length;
+    var fields = run.regs.map(function (r) { return { id: "m" + r.slice(1), label: r + " holds", kind: "text", accept: [run.map[r]], size: 5 }; });
+    fields.push(num("f", "False (WAR + WAW) dependencies removed", falseDeps));
     return {
-      prompt: p("This loop adds " + code("$s2") + " to each element of an array of " + n + " ints (" + code("$s1") + " starts at the last element):") +
-        pre(["Loop: lw   $t0, 0($s1)", "      addu $t0, $t0, $s2", "      sw   $t0, 0($s1)", "      addi $s1, $s1, -4", "      bne  $s1, $zero, Loop"]) +
-        p("The loop is unrolled " + u + " times: the body is copied " + u + " times with different offsets, and the pointer is updated once per iteration. How many instructions run before and after unrolling, and how many branches run after unrolling?"),
-      fields: [num("a", "Instructions before", orig), num("b", "Instructions after", unr), num("c", "Branches after", n / u)],
-      solution: p("Before: 5 instructions × " + n + " iterations = <strong>" + orig + "</strong>.") +
-        p("After: each iteration has " + u + " × 3 = " + 3 * u + " body instructions plus addi and bne, so " + (3 * u + 2) + " × " + n / u + " iterations = <strong>" + unr + "</strong>.") +
-        p("Branches: one per iteration = <strong>" + n / u + "</strong>.")
+      prompt: p("Registers are renamed as each instruction issues: initially " + run.regs.map(function (r, k) { return code(r) + " = V" + k; }).join(", ") + ", and each new result gets the next name (V4, V5, …).") +
+        pre(run.ins.map(function (i, k) { return (k + 1) + ": " + i.text; })) +
+        p("Which value name does each register hold at the end? How many WAR and WAW dependencies does renaming remove?"),
+      fields: fields,
+      solution: table(["Instruction", "Renamed"], run.ins.map(function (i) { return [code(i.text), esc(i.ren)]; })) +
+        p("Final names: " + run.regs.map(function (r) { return code(r) + " = <strong>" + run.map[r] + "</strong>"; }).join(", ") + ".") +
+        (deps.length ? ul(deps.map(function (d) { return d.type + " on " + code(d.reg) + ": " + (d.from + 1) + " → " + (d.to + 1); })) : "") +
+        p("False dependencies removed: <strong>" + falseDeps + "</strong> (RAW dependencies remain).")
     };
-  };
-  G["ilp/vliw"] = function (R) {
+  }]);
+  G["ilp/unrolling"] = variants([function (R) {
+    var n = R.pick([64, 100, 128, 200, 256]), u = R.pick([2, 4]), body4 = R.chance(0.5), b = body4 ? 4 : 3;
+    var lines = body4 ? ["Loop: lw   $t0, 0($s1)", "      sll  $t0, $t0, 1", "      addu $t0, $t0, $s2", "      sw   $t0, 0($s1)", "      addi $s1, $s1, -4", "      bne  $s1, $zero, Loop"]
+      : ["Loop: lw   $t0, 0($s1)", "      addu $t0, $t0, $s2", "      sw   $t0, 0($s1)", "      addi $s1, $s1, -4", "      bne  $s1, $zero, Loop"];
+    var orig = (b + 2) * n, unr = (b * u + 2) * n / u;
+    return {
+      prompt: p("This loop processes an array of " + n + " ints:") + pre(lines) +
+        p("It is unrolled " + u + " times: the body is copied " + u + " times with adjusted offsets, and the pointer update and branch run once per new iteration. How many instructions run before and after unrolling, and how many branches run after?"),
+      fields: [num("a", "Instructions before", orig), num("b", "Instructions after", unr), num("c", "Branches after", n / u)],
+      solution: p("Before: " + (b + 2) + " × " + n + " = <strong>" + orig + "</strong>. After: (" + u + " × " + b + " + 2) × " + n / u + " = <strong>" + unr + "</strong>. Branches: <strong>" + n / u + "</strong>.")
+    };
+  }, function (R) {
+    var n = R.pick([64, 100, 128, 200]), u = R.pick([2, 4]), c = R.int(2, u);
+    return {
+      prompt: p("This loop walks backwards through an array of " + n + " ints:") +
+        pre(["Loop: lw   $t0, 0($s1)", "      addu $t0, $t0, $s2", "      sw   $t0, 0($s1)", "      addi $s1, $s1, -4", "      bne  $s1, $zero, Loop"]) +
+        p("It is unrolled " + u + " times, so each new iteration handles " + u + " elements and updates " + code("$s1") + " once. How many times does the new loop run? What immediate does its " + code("addi") + " use? What offset does the " + c + (c === 2 ? "nd" : c === 3 ? "rd" : "th") + " copy's " + code("lw") + " use?"),
+      fields: [num("i", "Iterations", n / u), num("a", "addi immediate", -4 * u), num("o", "Offset in copy " + c, -4 * (c - 1))],
+      solution: p("Iterations: " + n + " ÷ " + u + " = <strong>" + n / u + "</strong>. The pointer moves " + u + " ints per iteration: <strong>" + -4 * u + "</strong>. Copy k uses offset −4(k − 1), so copy " + c + " uses <strong>" + -4 * (c - 1) + "</strong>.")
+    };
+  }]);
+  function vliwAny(R) {
     var n = R.int(6, 8), preds = [], lines = [], W = R.pick([2, 3]);
     for (var k = 0; k < n; k++) {
       var cand = [];
       for (var q = 0; q < k; q++) if (R.chance(0.35)) cand.push(q);
-      cand = cand.slice(-2);
-      preds.push(cand);
-      var srcs = cand.map(function (q) { return "$t" + q; });
+      cand = cand.slice(-2); preds.push(cand);
+      var srcs = cand.map(function (q2) { return "$t" + q2; });
       while (srcs.length < 2) srcs.push(R.pick(["$s0", "$s1", "$s2", "$s3"]));
       lines.push((k + 1) + ": " + R.pick(["add", "sub", "and", "or", "xor"]) + " $t" + k + ", " + srcs[0] + ", " + srcs[1]);
     }
-    var cp = criticalPath(preds), best = minSchedule(preds, W);
+    var cp = criticalPath(preds), best = minSchedule(preds, { any: W });
     return {
-      prompt: p("Registers have already been renamed, so only true dependencies remain. Every instruction takes 1 cycle, and a dependent instruction can issue in the cycle after its producer.") + pre(lines) +
-        p("What is the length of the critical path (in instructions)? What is the minimum number of cycles on a " + W + "-issue VLIW machine where any instruction can go in any slot, and what IPC does that give?"),
-      fields: [num("cp", "Critical path", cp), num("c", "Minimum cycles", best), num("ipc", "IPC", round(n / best, 2), { tol: 0.01 })],
-      solution: p("Dependencies: " + preds.map(function (ps, k) { return ps.length ? (k + 1) + " needs " + ps.map(function (q) { return q + 1; }).join(" and ") : null; }).filter(Boolean).join("; ") + ".") +
-        p("The longest chain has <strong>" + cp + "</strong> instructions, so no schedule can be shorter than " + cp + " cycles; with " + n + " instructions and " + W + " slots it needs at least ⌈" + n + " ÷ " + W + "⌉ = " + Math.ceil(n / W) + ".") +
-        p("Minimum cycles: <strong>" + best + "</strong>; IPC = " + n + " ÷ " + best + " = <strong>" + fmt(n / best) + "</strong>.")
+      prompt: p("Registers are already renamed, so only true dependencies remain. Each instruction takes 1 cycle; a dependent instruction can issue the cycle after its producer.") + pre(lines) +
+        p("What is the critical path length, the minimum number of cycles on a " + W + "-issue VLIW machine (any instruction in any slot), and the resulting CPI? (Fractions are fine.)"),
+      fields: [num("cp", "Critical path", cp), num("c", "Minimum cycles", best), num("cpi", "CPI", best / n, { tol: 0.005 })],
+      solution: p("Longest chain: <strong>" + cp + "</strong> instructions. The schedule needs at least max(" + cp + ", ⌈" + n + " ÷ " + W + "⌉) cycles; the best one takes <strong>" + best + "</strong>, so CPI = " + best + "/" + n + " = <strong>" + fmt(best / n) + "</strong>.")
     };
+  }
+  function vliwTyped(R) {
+    var n = R.int(5, 6), ins = [], preds = [], types = [], lines = [], free = ["$t0", "$t1", "$t2", "$t3", "$t4", "$t5"];
+    for (var k = 0; k < n; k++) {
+      var mem = R.chance(0.45), cand = [];
+      for (var q = 0; q < k; q++) if (ins[q].dst && R.chance(0.35)) cand.push(q);
+      cand = cand.slice(-2);
+      var srcs = cand.map(function (q2) { return ins[q2].dst; }), dst = free[k], text;
+      if (mem && srcs.length && R.chance(0.5)) { text = "sw " + srcs[0] + ", " + 4 * R.int(0, 4) + "($s0)"; ins.push({ dst: null }); cand = cand.slice(0, 1); }
+      else if (mem) { text = "lw " + dst + ", " + 4 * R.int(0, 4) + "($s0)"; ins.push({ dst: dst }); cand = []; }
+      else {
+        while (srcs.length < 2) srcs.push(R.pick(["$s1", "$s2"]));
+        text = R.pick(["add", "sub", "or"]) + " " + dst + ", " + srcs[0] + ", " + srcs[1]; ins.push({ dst: dst });
+      }
+      preds.push(cand); types.push(mem ? "mem" : "alu"); lines.push((k + 1) + ": " + text);
+    }
+    var best = minSchedule(preds, { alu: 1, mem: 1 }, types);
+    return {
+      prompt: p("A two-issue processor can start one ALU instruction and one load/store in the same cycle. Each instruction takes 1 cycle, a dependent instruction can issue the cycle after its producer, and instructions may be reordered as long as dependencies are respected.") + pre(lines) +
+        p("What is the minimum number of cycles, and the resulting CPI? (Fractions are fine.)"),
+      fields: [num("c", "Minimum cycles", best), num("cpi", "CPI", best / n, { tol: 0.005 })],
+      solution: p("ALU instructions: " + types.filter(function (t) { return t === "alu"; }).length + "; loads/stores: " + types.filter(function (t) { return t === "mem"; }).length + ". The best schedule pairs independent ALU and memory instructions and takes <strong>" + best + "</strong> cycles, so CPI = " + best + "/" + n + " = <strong>" + fmt(best / n) + "</strong>.")
+    };
+  }
+  G["ilp/vliw"] = variants([vliwAny, vliwTyped]);
+  G["ilp/concepts"] = function (R) {
+    return quiz(R, [
+      { q: "Register renaming removes which dependencies?", o: ["WAR and WAW", "RAW only", "RAW and WAR", "All of them"], why: "True (RAW) dependencies carry real data and remain." },
+      { q: "A CPI below 1 requires…", o: ["issuing more than one instruction per cycle", "a deeper pipeline", "a bigger cache", "forwarding"], why: "One instruction per cycle gives CPI ≥ 1." },
+      { q: "In a VLIW processor, which instructions issue together is decided by…", o: ["the compiler", "the hardware at run time", "the operating system", "the programmer, by hand"], why: "Dynamic superscalar processors decide in hardware." },
+      { q: "Loop unrolling helps mainly by…", o: ["reducing loop overhead and exposing independent instructions", "reducing the code size", "removing true dependencies", "shortening the clock"], why: "Fewer branches and counter updates, and more work to schedule." },
+      { q: "A cost of loop unrolling is…", o: ["larger code and more registers", "more branches", "a longer critical path", "more cache coherence traffic"], why: "The body is duplicated." },
+      { q: "A dynamic superscalar processor with 4 execution units that fetches 1 instruction per cycle has a minimum CPI of…", o: ["1", "0.25", "0.5", "4"], why: "It cannot finish instructions faster than it fetches them." }
+    ], 3);
   };
 
   /* ----- 10. Multicore ----- */
-  G["multicore/mesi"] = function (R) {
-    var reqs = [], n = R.int(6, 8), rows, tries = 0;
-    do {
-      reqs = [];
-      for (var k = 0; k < n; k++) reqs.push({ p: R.int(0, 2), op: R.chance(0.55) ? "R" : "W" });
-      rows = simulateMesi(reqs);
-    } while ((rows.filter(function (r) { return r.hit; }).length === 0 || rows.filter(function (r) { return r.supplier.indexOf("P") === 0; }).length === 0) && ++tries < 200);
-    var stOpts = ["M", "E", "S", "I", "-"], supOpts = ["-", "Memory", "P1", "P2", "P3", "P1 or P2", "P1 or P3", "P2 or P3"];
-    var fields = [], trows = [["Initially", "-", "-", "-", "-", "-"]];
+  G["multicore/mesi"] = variants([function (R) {
+    var cores = R.pick([3, 3, 4]), reqs, rows, n = R.int(6, 7), c;
+    R.until(function () {
+      reqs = []; for (var k = 0; k < n; k++) reqs.push({ p: R.int(0, cores - 1), op: R.chance(0.55) ? "R" : "W" });
+      rows = simulateMesi(reqs, cores); return true;
+    }, function () { return rows.some(function (r) { return r.hit; }) && rows.some(function (r) { return r.supplier.indexOf("P") === 0; }); });
+    var stOpts = ["M", "E", "S", "I", "-"], supOpts = ["-", "Memory"];
+    for (c = 1; c <= cores; c++) supOpts.push("P" + c);
+    rows.forEach(function (r) { if (supOpts.indexOf(r.supplier) === -1) supOpts.push(r.supplier); });
+    var fields = [], init = ["Initially"], trows = [];
+    for (c = 0; c < cores; c++) init.push("-");
+    trows.push(init.concat(["-", "-"]));
     rows.forEach(function (r, k) {
       var cells = ["P" + (r.req.p + 1) + (r.req.op === "R" ? " reads" : " writes")];
       r.states.forEach(function (s, q) { fields.push(choice("s" + k + q, "", stOpts, s)); cells.push({ f: "s" + k + q }); });
       var accept = r.supplier.indexOf(" or ") !== -1 ? [r.supplier].concat(r.supplier.split(" or ")) : [r.supplier];
-      fields.push(choice("d" + k, "", supOpts, r.supplier, { answers: accept }));
-      fields.push(choice("h" + k, "", ["hit", "miss"], r.hit ? "hit" : "miss"));
-      cells.push({ f: "d" + k }, { f: "h" + k });
-      trows.push(cells);
+      fields.push(choice("d" + k, "", supOpts, r.supplier, { answers: accept }), choice("h" + k, "", ["hit", "miss"], r.hit ? "hit" : "miss"));
+      cells.push({ f: "d" + k }, { f: "h" + k }); trows.push(cells);
     });
+    var head = ["Request"]; for (c = 1; c <= cores; c++) head.push("P" + c);
     return {
-      prompt: p("Three cores P1, P2 and P3 have private caches kept coherent with the MESI protocol. All caches start empty (−). For each request to the same cache block, give the state of the block in every cache afterwards, which cache or memory supplies the data, and whether it is a hit or a miss."),
-      table: { head: ["Request", "P1", "P2", "P3", "Supplier", "Hit/miss"], rows: trows },
+      prompt: p(cores + " cores have private caches kept coherent with MESI, all starting empty (−). For each request to the same block, give every cache's state afterwards, who supplies the data, and whether it is a hit."),
+      table: { head: head.concat(["Supplier", "Hit/miss"]), rows: trows },
       fields: fields,
-      solution: table(["Request", "P1", "P2", "P3", "Supplier", "Hit/miss"], rows.map(function (r) {
-        return ["P" + (r.req.p + 1) + (r.req.op === "R" ? " reads" : " writes")].concat(r.states).concat([r.supplier, r.hit ? "hit" : "miss"]);
-      })) + ul(["A read miss loads the block as E if no other cache has it, otherwise as S (other copies become S, and a cache with the block supplies it).",
-        "A write leaves the writer in M and invalidates (I) every other copy.", "Hits need no data from anywhere (−)."])
+      solution: table(head.concat(["Supplier", "Hit/miss"]), rows.map(function (r) { return ["P" + (r.req.p + 1) + (r.req.op === "R" ? " reads" : " writes")].concat(r.states).concat([r.supplier, r.hit ? "hit" : "miss"]); })) +
+        ul(["A read miss gives E if no other cache has the block, otherwise S (other copies become S and one of them supplies it).", "A write leaves the writer in M and invalidates every other copy.", "Hits need no data (−)."])
+    };
+  }, function (R) {
+    var cores = 3, reqs = [], n = R.int(5, 7);
+    for (var k = 0; k < n; k++) reqs.push({ p: R.int(0, 2), op: R.chance(0.55) ? "R" : "W" });
+    var rows = simulateMesi(reqs, cores), last = rows[rows.length - 1].states;
+    var misses = rows.filter(function (r) { return !r.hit; }).length, mem = rows.filter(function (r) { return r.supplier === "Memory"; }).length;
+    var fields = last.map(function (s, q) { return choice("f" + q, "P" + (q + 1) + " final state", ["M", "E", "S", "I", "-"], s); });
+    fields.push(num("m", "Misses", misses), num("mm", "Times memory supplies the data", mem));
+    return {
+      prompt: p("Three cores with private MESI caches, all starting empty, make these requests to the same block:") +
+        p(code(reqs.map(function (r) { return "P" + (r.p + 1) + (r.op === "R" ? " read" : " write"); }).join(", "))) +
+        p("What is the block's final state in each cache? How many requests miss, and how many times does main memory supply the data?"),
+      fields: fields,
+      solution: table(["Request", "P1", "P2", "P3", "Supplier", "Hit/miss"], rows.map(function (r) { return ["P" + (r.req.p + 1) + (r.req.op === "R" ? " reads" : " writes")].concat(r.states).concat([r.supplier, r.hit ? "hit" : "miss"]); })) +
+        p("Misses: <strong>" + misses + "</strong>; memory supplies the data <strong>" + mem + "</strong> time" + (mem === 1 ? "" : "s") + " (only when no other cache holds the block).")
+    };
+  }]);
+  G["multicore/sharing"] = variants([
+    function (R) {
+      var steps, kinds;
+      R.until(function () { steps = []; for (var k = 0; k < 6; k++) steps.push({ p: R.int(0, 1), op: R.chance(0.5) ? "W" : "R", w: R.int(0, 3) }); kinds = classifySharing(steps); return true; },
+        function () { return kinds.indexOf("true sharing miss") !== -1 && kinds.indexOf("false sharing miss") !== -1; });
+      var opts = ["hit", "cold miss", "true sharing miss", "false sharing miss"];
+      return {
+        prompt: p("Words x[0]–x[3] share one cache block. P1 and P2 have private caches (initially empty) with write-invalidate coherence; a write to a block the writer already holds is a hit. Classify each access.") +
+          p("After a copy is invalidated, its next miss is a <em>true sharing</em> miss if it touches a word the other core wrote since the invalidation, otherwise a <em>false sharing</em> miss."),
+        table: { head: ["Step", "Access", "Result"], rows: steps.map(function (s, k) { return [k + 1, "P" + (s.p + 1) + (s.op === "R" ? " reads" : " writes") + " x[" + s.w + "]", { f: "k" + k }]; }) },
+        fields: kinds.map(function (kd, k) { return choice("k" + k, "", opts, kd); }),
+        solution: table(["Step", "Access", "Result"], steps.map(function (s, k) { return [k + 1, "P" + (s.p + 1) + (s.op === "R" ? " reads" : " writes") + " x[" + s.w + "]", "<strong>" + kinds[k] + "</strong>"]; }))
+      };
+    },
+    function (R) {
+      var steps, kinds;
+      R.until(function () { steps = []; for (var k = 0; k < 6; k++) steps.push({ p: R.int(0, 1), op: R.chance(0.5) ? "W" : "R", w: R.int(1, 2) }); kinds = classifySharing(steps); return true; },
+        function () { return kinds.indexOf("true sharing miss") !== -1 || kinds.indexOf("false sharing miss") !== -1; });
+      var c = function (k) { return kinds.filter(function (x) { return x === k; }).length; };
+      return {
+        prompt: p("x[1] and x[2] are in the same cache block. P1 and P2 (private caches, initially empty, write-invalidate; writing a block you already hold is a hit) perform:") +
+          table(["Time", "Access"], steps.map(function (s, k) { return [k + 1, "P" + (s.p + 1) + (s.op === "R" ? " reads" : " writes") + " x[" + s.w + "]"]; })) +
+          p("How many cold misses, true sharing misses and false sharing misses occur?"),
+        fields: [num("c", "Cold misses", c("cold miss")), num("t", "True sharing misses", c("true sharing miss")), num("f", "False sharing misses", c("false sharing miss"))],
+        solution: table(["Time", "Result"], kinds.map(function (k, i) { return [i + 1, k]; }))
+      };
+    }
+  ]);
+  G["multicore/races"] = function (R) {
+    var n = R.int(2, 4), v = R.pick([0, 10, 50, 100]), k = R.pick([1, 1, 2, 5]), vals = [];
+    for (var i = 1; i <= n; i++) vals.push(v + i * k);
+    return {
+      prompt: p(n + " threads run this code at the same time, with no synchronization. " + code("Mem[$s0]") + " starts at " + v + ".") +
+        pre(["lw   $t0, 0($s0)", "addi $t0, $t0, " + k, "sw   $t0, 0($s0)"]) + p("List every value " + code("Mem[$s0]") + " could hold after all threads finish."),
+      fields: [{ id: "v", label: "Possible values", kind: "set", answer: vals, size: 16 }],
+      solution: p("Each thread reads, adds " + k + " and writes back. If threads read before others write, their updates overwrite each other, so anywhere from 1 to " + n + " updates survive: <strong>" + vals.join(", ") + "</strong>.")
     };
   };
-  G["multicore/sharing"] = function (R) {
-    var steps, kinds, tries = 0;
-    do {
-      steps = [];
-      for (var k = 0; k < 6; k++) steps.push({ p: R.int(0, 1), op: R.chance(0.5) ? "W" : "R", w: R.int(0, 3) });
-      kinds = classifySharing(steps);
-    } while ((kinds.indexOf("true sharing miss") === -1 || kinds.indexOf("false sharing miss") === -1) && ++tries < 400);
-    var opts = ["hit", "cold miss", "true sharing miss", "false sharing miss"];
-    return {
-      prompt: p("Words x[0] … x[3] are in the same cache block. Cores P1 and P2 have private caches that start empty and use an invalidation protocol: a write by one core invalidates the other core's copy, and a write to a block the writer already has is a hit.") +
-        p("Classify each access. After a core's copy has been invalidated, its next miss is a <em>true sharing</em> miss if it accesses a word the other core wrote since the invalidation, and a <em>false sharing</em> miss otherwise."),
-      table: { head: ["Step", "Access", "Result"], rows: steps.map(function (s, k) { return [k + 1, "P" + (s.p + 1) + (s.op === "R" ? " reads" : " writes") + " x[" + s.w + "]", { f: "k" + k }]; }) },
-      fields: kinds.map(function (kd, k) { return choice("k" + k, "", opts, kd); }),
-      solution: table(["Step", "Access", "Result"], steps.map(function (s, k) { return [k + 1, "P" + (s.p + 1) + (s.op === "R" ? " reads" : " writes") + " x[" + s.w + "]", "<strong>" + kinds[k] + "</strong>"]; })) +
-        p("False sharing misses happen only because different words share a block; with one word per block they would be hits.")
-    };
+  G["multicore/concepts"] = function (R) {
+    return quiz(R, [
+      { q: "Under Flynn's taxonomy, a multicore processor is…", o: ["MIMD", "SISD", "SIMD", "MISD"], why: "Each core runs its own instruction stream on its own data." },
+      { q: "A single-core processor with no vector instructions is…", o: ["SISD", "SIMD", "MIMD", "MISD"], why: "One instruction stream, one data stream." },
+      { q: "In MESI, a block that is in exactly one cache and matches memory is…", o: ["Exclusive", "Modified", "Shared", "Invalid"], why: "Modified means it differs from memory." },
+      { q: "False sharing happens when cores…", o: ["use different words that share a cache block, and at least one writes", "read the same word", "use different blocks", "never write"], why: "The block bounces between caches although no data is actually shared." },
+      { q: "A data race needs two threads that…", o: ["access the same location without synchronization, at least one writing", "read the same location", "run on different cores", "use different locks"], why: "Concurrent reads alone are harmless." },
+      { q: "Snooping coherence protocols work by…", o: ["having every cache watch a shared bus", "keeping all data in memory", "giving each core a separate memory", "disabling caches for shared data"], why: "Caches react to each other's bus traffic." },
+      { q: "Under write-invalidate, when a core writes a shared block, the other copies are…", o: ["invalidated", "updated with the new value", "written back to disk", "left unchanged"], why: "Write-update protocols are the ones that send the new value." }
+    ], 3);
   };
 
   /* ----- 11. GPU ----- */
-  G["gpu/divergence"] = function (R) {
+  G["gpu/divergence"] = variants([function (R) {
     var T = R.pick([64, 96, 128]), warps = T / 32, a = R.int(1, 5) * 10, b = R.int(1, 5) * 10, v = R.int(0, 2), cond, test;
     if (v === 0) { var c = R.int(1, T - 1); cond = "threadIdx.x < " + c; test = function (t) { return t < c; }; }
     else if (v === 1) { var m = R.pick([2, 4, 64]); cond = "threadIdx.x % " + m + " == 0"; test = function (t) { return t % m === 0; }; }
@@ -1101,30 +1882,66 @@
       for (var t = 32 * w; t < 32 * w + 32; t++) { if (test(t)) anyT = true; else anyF = true; }
       if (anyT && anyF) div++;
       var cost = (anyT ? a : 0) + (anyF ? b : 0);
-      total += cost; per.push("warp " + w + ": " + (anyT && anyF ? "both paths, " : anyT ? "if path only, " : "else path only, ") + cost);
+      total += cost; per.push("warp " + w + ": " + (anyT && anyF ? "both paths" : anyT ? "path A only" : "path B only") + ", " + cost + " cycles");
     }
     return {
-      prompt: p("A thread block of " + T + " threads (warps of 32) runs:") +
-        pre(["if (" + cond + ") {", "    // path A: " + a + " cycles", "} else {", "    // path B: " + b + " cycles", "}"]) +
-        p("How many warps are there, how many of them diverge, and what is the total number of cycles summed over all warps?"),
+      prompt: p("A block of " + T + " threads (warps of 32) runs:") + pre(["if (" + cond + ") {", "    // path A: " + a + " cycles", "} else {", "    // path B: " + b + " cycles", "}"]) +
+        p("How many warps are there, how many diverge, and what is the total number of cycles summed over all warps?"),
       fields: [num("w", "Warps", warps), num("d", "Divergent warps", div), num("c", "Total warp-cycles", total)],
-      solution: p("A warp runs path A if any of its threads takes it, and path B if any thread takes it; when both are needed they run one after the other.") +
-        ul(per) + p("Divergent warps: <strong>" + div + "</strong>; total: <strong>" + total + "</strong> cycles.")
+      solution: ul(per) + p("A warp runs every path that at least one of its threads takes, one after the other. Divergent warps: <strong>" + div + "</strong>; total <strong>" + total + "</strong> cycles.")
     };
-  };
-  G["gpu/coalescing"] = function (R) {
-    var s = R.pick([1, 2, 4, 8, 16, 32]), o = R.chance(0.5) ? 0 : R.int(1, 31), seg = R.pick([32, 128]);
-    var segs = {};
-    for (var t = 0; t < 32; t++) segs[Math.floor(4 * (o + s * t) / seg)] = true;
-    var n = Object.keys(segs).length, eff = 128 / (n * seg) * 100;
+  }, function (R) {
+    var T = 128, c = R.pick([16, 40, 64, 72, 100, 112]), lo = R.pick([0, 8, 32]), test = function (t) { return t >= lo && t < c; }, rows = [], fields = [];
+    for (var w = 0; w < 4; w++) {
+      var anyT = false, anyF = false, active = 0;
+      for (var t = 32 * w; t < 32 * w + 32; t++) { if (test(t)) { anyT = true; active++; } else anyF = true; }
+      fields.push(choice("d" + w, "", YN, anyT && anyF ? "yes" : "no"), num("a" + w, "", active, { size: 3 }));
+      rows.push(["warp " + w + " (threads " + 32 * w + "–" + (32 * w + 31) + ")", { f: "d" + w }, { f: "a" + w }]);
+    }
+    return {
+      prompt: p("A block of 128 threads (4 warps of 32) runs:") + pre(["if (threadIdx.x >= " + lo + " && threadIdx.x < " + c + ") {", "    // do work", "}"]) +
+        p("For each warp, does it diverge, and how many of its threads take the if-path?"),
+      table: { head: ["Warp", "Diverges?", "Threads in the if-path"], rows: rows },
+      fields: fields,
+      solution: p("Threads " + lo + "–" + (c - 1) + " take the if-path. A warp diverges when some, but not all, of its 32 threads do.") +
+        table(["Warp", "Diverges?", "Threads in the if-path"], [0, 1, 2, 3].map(function (w) { var f1 = fields[2 * w], f2 = fields[2 * w + 1]; return ["warp " + w, f1.answer, f2.answer]; }))
+    };
+  }]);
+  G["gpu/coalescing"] = variants([function (R) {
+    var o2 = R.until(function () {
+      var s = R.pick([1, 2, 4, 8, 32]), o = R.chance(0.5) ? 0 : R.pick([1, 4, 8, 16]), seg = R.pick([32, 128]), segs = {};
+      for (var t = 0; t < 32; t++) segs[Math.floor(4 * (o + s * t) / seg)] = true;
+      var n = Object.keys(segs).length;
+      return { s: s, o: o, seg: seg, n: n, eff: 128 / (n * seg) * 100 };
+    }, function (x) { return exact(x.eff, 2); });
+    var s = o2.s, o = o2.o, seg = o2.seg, n = o2.n, eff = o2.eff;
     return {
       prompt: p("Each of the 32 threads in a warp reads one 4-byte float:") + pre(["float v = a[" + (o ? o + " + " : "") + (s === 1 ? "" : s + " * ") + "threadIdx.x];"]) +
-        p("The array starts at an address that is a multiple of " + seg + ". Memory is read in aligned " + seg + "-byte transactions. How many transactions does the warp need, and what percentage of the bytes transferred are actually used?"),
-      fields: [num("n", "Transactions", n), num("e", "Efficiency", round(eff, 1), { tol: 0.1, suffix: "%" })],
-      solution: p("Thread t reads byte address 4 × (" + (o ? o + " + " : "") + s + "t), so the warp spans bytes " + 4 * o + " to " + (4 * (o + 31 * s) + 3) + ".") +
-        p("Those addresses touch <strong>" + n + "</strong> different " + seg + "-byte segments. Useful bytes = 32 × 4 = 128, transferred = " + n + " × " + seg + " = " + n * seg +
-          ", so efficiency = <strong>" + fmt(eff, 1) + "%</strong>.")
+        p("a[] starts at a multiple of " + seg + " bytes, and memory is read in aligned " + seg + "-byte transactions. How many transactions does the warp need, and what percentage of the transferred bytes are used?"),
+      fields: [num("n", "Transactions", n), num("e", "Efficiency", round(eff, 2), { suffix: "%" })],
+      solution: p("Thread t reads byte " + (o ? 4 * o + " + " : "") + 4 * s + "t, so the warp spans bytes " + 4 * o + " to " + (4 * (o + 31 * s) + 3) + ", touching <strong>" + n + "</strong> " + seg + "-byte segments. Used 128 of " + n * seg + " bytes: <strong>" + fmt(eff) + "%</strong>.")
     };
+  }, function (R) {
+    var fieldsN = R.pick([2, 4, 8]), size = 4 * fieldsN, aos = 32 * size / 128, soa = 1;
+    return {
+      prompt: p("Each particle has " + fieldsN + " floats (4 bytes each). Each of the 32 threads in a warp reads the " + code("x") + " value of one particle (thread t reads particle t). Memory is read in aligned 128-byte transactions, and the arrays start at multiples of 128.") +
+        pre(["// array of structs: struct P { float x, y" + (fieldsN > 2 ? ", …" : "") + "; } p[N];", "float v = p[threadIdx.x].x;", "", "// struct of arrays: float x[N], y[N]" + (fieldsN > 2 ? ", …" : "") + ";", "float v = x[threadIdx.x];"]) +
+        p("How many transactions does the warp need with each layout?"),
+      fields: [num("a", "Array of structs", aos), num("s", "Struct of arrays", soa)],
+      solution: p("Array of structs: consecutive x values are " + size + " bytes apart, so the warp spans 32 × " + size + " = " + 32 * size + " bytes = <strong>" + aos + "</strong> transactions.") +
+        p("Struct of arrays: the 32 x values are contiguous (128 bytes) = <strong>1</strong> transaction. This is why GPU code prefers struct-of-arrays layouts.")
+    };
+  }]);
+  G["gpu/concepts"] = function (R) {
+    return quiz(R, [
+      { q: "Threads in a warp…", o: ["execute the same instruction together", "each run a different program", "run on different GPUs", "never share memory"], why: "This is SIMT execution." },
+      { q: "A warp on current NVIDIA GPUs has…", o: ["32 threads", "16 threads", "64 threads", "1024 threads"], why: "Thread blocks are split into warps of 32." },
+      { q: "When threads in a warp take different branches…", o: ["the paths run one after the other, with some threads idle", "each thread runs its path in parallel at no cost", "the warp is cancelled", "the GPU hands the work to the CPU"], why: "This is branch divergence." },
+      { q: "A memory access is coalesced when…", o: ["the threads of a warp touch consecutive addresses", "each thread uses its own cache", "accesses go through the CPU", "all threads read the same address from different warps"], why: "Consecutive addresses combine into few transactions." },
+      { q: "GPU shared memory is…", o: ["small, fast on-chip memory shared by a thread block", "the GPU's main DRAM", "memory shared with the CPU", "the L3 cache"], why: "The programmer manages it explicitly." },
+      { q: "Tensor cores speed up…", o: ["matrix multiply-accumulate", "branch prediction", "cache coherence", "integer division"], why: "They target the core operation of deep learning." },
+      { q: "Compared with CPUs, GPUs spend more chip area on…", o: ["arithmetic units", "branch predictors", "large caches", "out-of-order control"], why: "They trade single-thread speed for throughput." }
+    ], 3);
   };
 
   /* =====================================================================
@@ -1132,7 +1949,9 @@
      ===================================================================== */
   function norm(s) { return String(s).trim().toLowerCase().replace(/\s+/g, ""); }
   function parseNum(s) {
-    s = String(s).trim().replace(/,/g, "").replace(/%$/, "");
+    s = String(s).trim().replace(/,/g, "").replace(/%$/, "").trim();
+    var fr = /^([-+]?\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)$/.exec(s);
+    if (fr) { var d = parseFloat(fr[2]); return d === 0 ? NaN : parseFloat(fr[1]) / d; }
     if (!/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(s)) return NaN;
     return parseFloat(s);
   }
@@ -1144,6 +1963,10 @@
     var k = REGS.indexOf(s);
     return k === -1 ? NaN : k;
   }
+  function parseNums(raw) {
+    var toks = String(raw).split(/[\s,;]+/).filter(function (t) { return t && !/^(-|—|empty|none)$/i.test(t); });
+    return toks.map(function (t) { return /^0x/i.test(t) ? parseInt(t, 16) : parseNum(t); });
+  }
   var CHECKERS = {
     number: function (f, raw) {
       var v = parseNum(raw);
@@ -1151,25 +1974,23 @@
       var tol = Math.max(f.tol || 0, f.rel ? f.rel * Math.abs(f.answer) : 0);
       return { ok: Math.abs(v - f.answer) <= tol + 1e-9 };
     },
-    text: function (f, raw) {
-      var r = norm(raw);
-      return { ok: f.accept.some(function (a) { return norm(a) === r; }) };
-    },
-    choice: function (f, raw) {
-      if (f.any) return { ok: true };
-      return { ok: raw === f.answer || (f.answers || []).indexOf(raw) !== -1 };
-    },
+    text: function (f, raw) { var r = norm(raw); return { ok: f.accept.some(function (a) { return norm(a) === r; }) }; },
+    choice: function (f, raw) { if (f.any) return { ok: true }; return { ok: raw === f.answer || (f.answers || []).indexOf(raw) !== -1 }; },
     set: function (f, raw) {
-      var toks = String(raw).split(/[\s,;]+/).filter(function (t) { return t && !/^(-|—|empty|none)$/i.test(t); });
-      var vals = toks.map(function (t) { return /^0x/i.test(t) ? parseInt(t, 16) : parseNum(t); });
+      var vals = parseNums(raw);
       if (vals.some(isNaN)) return { ok: false, note: "Use numbers separated by commas." };
       var uniq = vals.filter(function (v, i) { return vals.indexOf(v) === i; }).sort(function (a, b) { return a - b; });
       return { ok: uniq.length === f.answer.length && uniq.every(function (v, i) { return v === f.answer[i]; }) };
     },
+    list: function (f, raw) {
+      var vals = parseNums(raw);
+      if (vals.some(isNaN)) return { ok: false, note: "Use numbers separated by commas." };
+      return { ok: vals.length === f.answer.length && vals.every(function (v, i) { return v === f.answer[i]; }) };
+    },
     hex: function (f, raw) {
       var s = norm(raw).replace(/^0x/, "").replace(/_/g, "");
       if (!/^[0-9a-f]+$/.test(s)) return { ok: false, note: "Give the answer in hexadecimal, like 0x1A2B." };
-      return { ok: parseInt(s, 16) >>> 0 === f.answer >>> 0 && s.length <= 8 };
+      return { ok: s.length <= 8 && parseInt(s, 16) >>> 0 === f.answer >>> 0 };
     },
     bits: function (f, raw) {
       var s = norm(raw).replace(/^0b/, "").replace(/_/g, "");
@@ -1187,9 +2008,9 @@
       try { parsed = parseBool(raw, f.vars); } catch (e) { return { ok: false, note: "Couldn't read that expression (" + e.message + ")." }; }
       var tt = truthTable(parsed.tree, f.vars);
       for (var i = 0; i < tt.length; i++) {
-        if (tt[i] !== f.table[i]) return { ok: false, note: "Your expression isn't equivalent to F (they differ when xyz = " + bin(i, 3) + ")." };
+        if (tt[i] !== f.table[i]) return { ok: false, note: "Not equivalent: the expressions differ when " + f.vars.join("") + " = " + bin(i, f.vars.length) + "." };
       }
-      if (parsed.literals > f.maxLiterals) return { ok: false, note: "That's equivalent to F, but it can be simplified further (aim for " + f.maxLiterals + " literal" + (f.maxLiterals > 1 ? "s" : "") + ")." };
+      if (parsed.literals > f.maxLiterals) return { ok: false, note: "Equivalent, but it can be simplified further (aim for " + f.maxLiterals + " literal" + (f.maxLiterals === 1 ? "" : "s") + ")." };
       return { ok: true };
     }
   };
@@ -1198,32 +2019,26 @@
     if (raw.trim() === "" && field.kind !== "set") return { ok: false, blank: true };
     return CHECKERS[field.kind](field, raw);
   }
-  /* The canonical answer as a student would type it (used by tests). */
   function sampleAnswer(f) {
     switch (f.kind) {
-      case "number": return String(f.answer);
+      case "number": return exact(f.answer, 2) ? String(f.answer) : String(round(f.answer, 4));
       case "text": return f.accept[0];
       case "choice": return f.answer;
-      case "set": return f.answer.join(", ");
+      case "set": case "list": return f.answer.join(", ");
       case "hex": return hex(f.answer, 1);
       case "bits": return f.answer;
       case "reg": return REGS[f.answer];
       case "bool": return f.example;
     }
   }
-
-  function generate(key, seed) {
-    var g = G[key];
-    return g ? g(Rng(seed >>> 0)) : null;
-  }
+  function generate(key, seed) { var g = G[key]; return g ? g(Rng(seed >>> 0)) : null; }
 
   root.CS3350_PRACTICE = {
     has: function (key) { return !!G[key]; },
     keys: function () { return Object.keys(G); },
-    generate: generate,
-    check: check,
-    sampleAnswer: sampleAnswer,
+    generate: generate, check: check, sampleAnswer: sampleAnswer,
     _sim: { simulateCache: simulateCache, classifyMisses: classifyMisses, simulateMesi: simulateMesi, classifySharing: classifySharing,
-      findDependencies: findDependencies, pipelineStalls: pipelineStalls, minSchedule: minSchedule, parseBool: parseBool, truthTable: truthTable, encode: encode }
+      findDependencies: findDependencies, pipelineStalls: pipelineStalls, minSchedule: minSchedule, parseBool: parseBool, truthTable: truthTable,
+      encode: encode, minSop: minSop, parseNum: parseNum }
   };
 })(typeof window !== "undefined" ? window : globalThis);

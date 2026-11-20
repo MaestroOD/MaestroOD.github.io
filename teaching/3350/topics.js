@@ -23,7 +23,8 @@ window.CS3350 = {
         { id: "effective-cpi", title: "Effective CPI" },
         { id: "cpu-time", title: "CPU time" },
         { id: "amdahl", title: "Amdahl's law" },
-        { id: "compare", title: "Comparing processors" }
+        { id: "compare", title: "Comparing processors" },
+        { id: "concepts", title: "Concept check" }
       ]
     },
     {
@@ -47,7 +48,8 @@ window.CS3350 = {
         { id: "amat", title: "Average memory access time" },
         { id: "stall-cpi", title: "CPI with cache misses" },
         { id: "locality", title: "Identifying locality" },
-        { id: "miss-types", title: "Classifying misses" }
+        { id: "miss-types", title: "Classifying misses" },
+        { id: "concepts", title: "Concept check" }
       ]
     },
     {
@@ -69,7 +71,8 @@ window.CS3350 = {
       problems: [
         { id: "address-bits", title: "Tag, index and offset" },
         { id: "cache-sim", title: "Simulating a cache (LRU)" },
-        { id: "hit-rate", title: "Counting hits and misses" }
+        { id: "hit-rate", title: "Counting hits and misses" },
+        { id: "concepts", title: "Concept check" }
       ]
     },
     {
@@ -92,7 +95,8 @@ window.CS3350 = {
         { id: "twos-complement", title: "Two's complement" },
         { id: "binary-add", title: "Binary addition and overflow" },
         { id: "boolean-simplify", title: "Simplifying Boolean expressions" },
-        { id: "truth-table", title: "Truth tables and sum of products" }
+        { id: "truth-table", title: "Truth tables and sum of products" },
+        { id: "concepts", title: "Concept check" }
       ]
     },
     {
@@ -114,7 +118,8 @@ window.CS3350 = {
       problems: [
         { id: "flip-flops", title: "Flip-flop next state" },
         { id: "clock-period", title: "Maximum clock frequency" },
-        { id: "fsm-table", title: "FSM truth tables" }
+        { id: "fsm-table", title: "FSM truth tables" },
+        { id: "concepts", title: "Concept check" }
       ]
     },
     {
@@ -136,7 +141,10 @@ window.CS3350 = {
         { id: "encode", title: "Encoding instructions" },
         { id: "decode", title: "Decoding instructions" },
         { id: "branch-target", title: "Branch and jump targets" },
-        { id: "c-to-mips", title: "Translating C to MIPS" }
+        { id: "c-to-mips", title: "Translating C to MIPS" },
+        { id: "trace", title: "Tracing MIPS code" },
+        { id: "endianness", title: "Byte order (endianness)" },
+        { id: "concepts", title: "Concept check" }
       ]
     },
     {
@@ -158,7 +166,8 @@ window.CS3350 = {
       problems: [
         { id: "control-signals", title: "Control signals" },
         { id: "datapath-trace", title: "Tracing the datapath" },
-        { id: "clock-cycle", title: "Single- vs multi-cycle clock" }
+        { id: "clock-cycle", title: "Single- vs multi-cycle clock" },
+        { id: "concepts", title: "Concept check" }
       ]
     },
     {
@@ -181,7 +190,8 @@ window.CS3350 = {
       problems: [
         { id: "pipeline-time", title: "Pipelined time and speedup" },
         { id: "dependencies", title: "Data dependencies" },
-        { id: "stalls", title: "Stalls and forwarding" }
+        { id: "stalls", title: "Stalls and forwarding" },
+        { id: "concepts", title: "Concept check" }
       ]
     },
     {
@@ -202,7 +212,8 @@ window.CS3350 = {
       problems: [
         { id: "renaming", title: "Register renaming" },
         { id: "unrolling", title: "Loop unrolling" },
-        { id: "vliw", title: "VLIW scheduling" }
+        { id: "vliw", title: "VLIW scheduling" },
+        { id: "concepts", title: "Concept check" }
       ]
     },
     {
@@ -223,7 +234,9 @@ window.CS3350 = {
       ],
       problems: [
         { id: "mesi", title: "MESI state tables" },
-        { id: "sharing", title: "True vs false sharing" }
+        { id: "sharing", title: "True vs false sharing" },
+        { id: "races", title: "Data races" },
+        { id: "concepts", title: "Concept check" }
       ]
     },
     {
@@ -243,7 +256,8 @@ window.CS3350 = {
       ],
       problems: [
         { id: "divergence", title: "Warp divergence" },
-        { id: "coalescing", title: "Memory coalescing" }
+        { id: "coalescing", title: "Memory coalescing" },
+        { id: "concepts", title: "Concept check" }
       ]
     }
   ],

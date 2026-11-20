@@ -21,7 +21,7 @@
   </script>
   <link rel="stylesheet" href="../../../assets/site.css">
 </head>
-<body>
+<body class="app">
   <header>
     <nav class="container" aria-label="Primary navigation">
       <a class="brand" href="../../../">Adam Murdock Gale</a>
@@ -44,21 +44,21 @@
   </header>
 
   <main>
-    <section id="practice">
-      <div class="container">
-        <p class="breadcrumb"><a href="../../../#teaching">Teaching</a> / <a href="../">CS 3350A</a> / Practice</p>
-        <h1 class="page-title">Practice problems</h1>
-        <p class="bio">Pick a topic and a problem from the menu. Problems are randomly generated: use “New problem” for fresh numbers. Your problem and answers stay put when you switch between topics.</p>
-        <noscript><p>The practice problems need JavaScript.</p></noscript>
+    <section id="practice" class="practice-app">
+      <div class="practice-bar container">
+        <p class="breadcrumb"><a href="../../../#teaching">Teaching</a> / <a href="../">CS 3350A</a> / <strong>Practice problems</strong></p>
+        <p class="meta practice-hint">Random problems, no calculator needed. Your work on each problem stays put when you switch.</p>
+        <button class="menu-toggle" id="menu-toggle" type="button" aria-controls="practice-menu" aria-expanded="false">☰ <span id="menu-toggle-label">Topics</span></button>
+      </div>
+      <noscript><p class="container">The practice problems need JavaScript.</p></noscript>
 
-        <div class="practice-layout">
+      <div class="practice-layout container">
           <nav class="practice-menu" id="practice-menu" aria-label="Topics and problems"></nav>
-          <article class="problem-panel" aria-labelledby="problem-title">
+          <article class="problem-panel" id="problem-panel" aria-labelledby="problem-title">
             <p class="breadcrumb" id="problem-topic"></p>
             <h2 id="problem-title">Problem</h2>
             <div id="problem-body"></div>
           </article>
-        </div>
       </div>
     </section>
   </main>
