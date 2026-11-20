@@ -1,0 +1,397 @@
+/* Shared styles for maestrood.github.io (main page and course pages) */
+
+:root {
+  color-scheme: dark;
+
+  /* Western University brand colours
+     https://brand.westernu.ca/visual-identity/colours.html */
+  --western-purple: #4f2683;   /* primary */
+  --white: #ffffff;            /* primary */
+  --orchid: #8f55e0;           /* secondary */
+  --deep-focus: #201436;       /* secondary */
+  --grey: #818284;             /* secondary */
+  --sky: #7deafb;              /* accent: small details only */
+
+  /* How the site uses them */
+  --paper: var(--deep-focus);              /* page background */
+  --wash: #301a51;                         /* Western Purple at 35% over Deep Focus */
+  --ink: var(--white);                     /* headings, primary text */
+  --body-text: rgba(255, 255, 255, 0.85);  /* paragraphs */
+  --muted: rgba(255, 255, 255, 0.70);      /* secondary text */
+  --line: var(--western-purple);           /* dividers, card borders */
+  --brand: var(--western-purple);          /* header bar, primary button, tags */
+  --accent: var(--orchid);                 /* decoration only: underlines, rules (3.7:1 on Deep Focus, too low for small text) */
+  --link-hover: var(--sky);                /* underline colour on hover */
+}
+
+/* Light mode: white page, Deep Focus text, same purple header */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --paper: var(--white);
+  --wash: #f1eef5;                         /* Western Purple at 8% over white */
+  --ink: var(--deep-focus);                /* 17.3:1 on white */
+  --body-text: rgba(32, 20, 54, 0.85);     /* 11.1:1 */
+  --muted: rgba(32, 20, 54, 0.72);         /* 6.9:1 */
+  --line: #dcd4e6;                         /* Western Purple at 20% over white */
+  --link-hover: var(--western-purple);
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+  line-height: 1.65;
+  overflow-wrap: break-word;
+}
+
+a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+a:hover { text-decoration-color: var(--link-hover); }
+
+.container {
+  width: min(1008px, calc(100% - 40px)); /* one width for every section: 240px portrait + 48px gap + 720px text */
+  margin: 0 auto;
+}
+
+header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--brand);
+  border-bottom: 3px solid var(--accent);
+}
+
+nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 68px;
+  gap: 24px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--white);
+  text-decoration: none;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.chao { height: 40px; width: auto; flex: none; filter: drop-shadow(0 0 2px rgba(236, 232, 243, 0.45)); }
+
+/* Theme toggle: dark chao in light mode (switches to dark), hero chao in dark mode (switches to light) */
+.theme-toggle {
+  /* Fixed 40x40 box: both chao images sit centred in the same spot, so the
+     button never changes size or position and a second click toggles back */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  line-height: 0;
+}
+.theme-toggle .chao { max-width: 40px; max-height: 40px; }
+.theme-toggle:hover .chao { transform: scale(1.06); }
+.theme-toggle:focus-visible { outline: 2px solid var(--sky); outline-offset: 3px; border-radius: 6px; }
+.theme-toggle .chao-hero { display: none; }
+[data-theme="dark"] .theme-toggle .chao-dark { display: none; }
+[data-theme="dark"] .theme-toggle .chao-hero { display: block; }
+
+.nav-right { display: flex; align-items: center; gap: 18px; }
+
+.nav-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px;
+  font-size: 0.92rem;
+}
+
+/* The header stays Western Purple in both themes, so its text is always white */
+.nav-links a { color: rgba(255, 255, 255, 0.85); text-decoration: none; }
+.nav-links a:hover { color: var(--white); text-decoration: underline; text-decoration-color: var(--sky); }
+
+#about { background: linear-gradient(180deg, var(--wash), var(--paper)); }
+
+h2 { color: var(--ink); }
+
+h2::after {
+  content: "";
+  display: block;
+  width: 48px;
+  height: 3px;
+  margin-top: 12px;
+  background: var(--accent);
+}
+
+main { min-height: 70vh; }
+
+section {
+  padding: 72px 0;
+  border-bottom: 1px solid var(--line);
+  scroll-margin-top: 84px;
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 48px;
+  align-items: start;
+}
+
+.portrait-figure { margin: 0; width: 240px; }
+
+.portrait-figure figcaption {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.portrait {
+  display: block;
+  width: 240px;
+  height: auto;
+  object-fit: cover;
+  border-radius: 12px;
+  background: var(--wash);
+  border: 1px solid var(--line);
+}
+
+.portrait-placeholder {
+  display: grid;
+  place-items: center;
+  color: var(--western-purple);
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+h1, h2, h3 {
+  font-family: Georgia, "Times New Roman", serif;
+  line-height: 1.2;
+}
+
+h1 {
+  margin: 0 0 8px;
+  font-size: clamp(2.2rem, 5vw, 4rem);
+  letter-spacing: -0.02em;
+}
+
+h2 {
+  margin: 0 0 28px;
+  font-size: 2rem;
+}
+
+h3 {
+  margin: 0 0 6px;
+  font-size: 1.25rem;
+}
+
+.subtitle {
+  color: var(--ink);
+  font-size: 1.12rem;
+  font-weight: 700;
+}
+
+.bio {
+  max-width: 720px;
+  margin: 24px 0;
+  color: var(--body-text);
+  font-size: 1.05rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.button {
+  display: inline-block;
+  padding: 9px 14px;
+  border: 1px solid var(--grey);
+  border-radius: 7px;
+  color: var(--ink);
+  text-decoration: none;
+  background: transparent;
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+
+.button.primary {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--white);
+}
+
+.button:hover { text-decoration: none; transform: translateY(-1px); border-color: var(--accent); }
+.button.primary:hover { background: var(--accent); border-color: var(--accent); }
+
+.links { font-size: 0.92rem; }
+.links a { font-weight: 600; }
+
+.personal { flex: 1; color: var(--muted); margin: 0; }
+
+.irl { display: flex; align-items: flex-start; gap: 32px; }
+
+.cat {
+  display: block;
+  flex: none;
+  width: 160px;
+  height: auto;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.card {
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+}
+
+.card p { margin: 8px 0 0; color: var(--muted); }
+
+.meta {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.publication {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 18px;
+  padding: 18px 0;
+  border-top: 1px solid var(--line);
+}
+
+.publication:last-child { border-bottom: 1px solid var(--line); }
+
+.year {
+  align-self: start;
+  padding-left: 10px;
+  border-left: 3px solid var(--accent);
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.publication p { margin: 4px 0 0; color: var(--muted); }
+
+.news-item {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 20px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+
+.news-item:last-child { border-bottom: 1px solid var(--line); }
+
+.news-date { color: var(--muted); }
+
+footer {
+  padding: 28px 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+footer .container {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+h2 + h3.group, h3.group {
+  margin: 36px 0 4px;
+  color: var(--muted);
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+h2 + h3.group { margin-top: 0; }
+
+.tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--brand);
+  color: var(--white);
+  font-size: 0.78rem;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.interests { margin: 0; padding-left: 20px; color: var(--body-text); }
+
+@media (max-width: 760px) {
+  /* Phone header: name + chao on one row, links on a compact row below.
+     Not sticky here, so it doesn't eat a slice of a small screen. */
+  header { position: static; }
+  nav {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 6px 12px;
+    min-height: 0;
+    padding: 10px 0 12px;
+  }
+  .nav-right { display: contents; }
+  .theme-toggle { grid-column: 2; grid-row: 1; }
+  .nav-links { grid-column: 1 / -1; justify-content: flex-start; gap: 2px 16px; font-size: 0.9rem; }
+  .nav-links a { padding: 4px 0; }   /* taller tap targets */
+  section { padding: 48px 0; scroll-margin-top: 0; }
+  h2 { font-size: 1.75rem; }
+  h3 { font-size: 1.1rem; }
+  .subtitle { font-size: 1rem; }
+  .bio { font-size: 1rem; }
+  .card { padding: 16px; }
+  .hero { grid-template-columns: 1fr; gap: 28px; }
+  .portrait-figure, .portrait { width: 180px; }
+  .irl { flex-direction: column; gap: 20px; }
+  .cat { width: 140px; }
+  .grid { grid-template-columns: 1fr; }
+  .publication, .news-item { grid-template-columns: 1fr; gap: 4px; }
+  footer .container { flex-direction: column; }
+}
+
+/* Course pages */
+.breadcrumb { margin: 0 0 12px; color: var(--muted); font-size: 0.9rem; }
+.page-title { font-size: clamp(1.9rem, 4.5vw, 3rem); }
+
+.placeholder-box {
+  padding: 22px;
+  border: 1px dashed var(--grey);
+  border-radius: 10px;
+  color: var(--body-text);
+}
+.placeholder-box p { margin: 0 0 14px; }
+.button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
