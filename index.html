@@ -66,6 +66,7 @@
       color: var(--ink);
       background: var(--paper);
       line-height: 1.65;
+      overflow-wrap: break-word;
     }
 
     a {
@@ -133,6 +134,8 @@
     .theme-toggle .chao-hero { display: none; }
     [data-theme="dark"] .theme-toggle .chao-dark { display: none; }
     [data-theme="dark"] .theme-toggle .chao-hero { display: block; }
+
+    .nav-right { display: flex; align-items: center; gap: 18px; }
 
     .nav-links {
       display: flex;
@@ -370,9 +373,27 @@
     .interests { margin: 0; padding-left: 20px; color: var(--body-text); }
 
     @media (max-width: 760px) {
-      nav { align-items: flex-start; padding: 14px 0; }
-      .nav-links { justify-content: flex-end; gap: 10px 14px; }
-      section { padding: 52px 0; }
+      /* Phone header: name + chao on one row, links on a compact row below.
+         Not sticky here, so it doesn't eat a slice of a small screen. */
+      header { position: static; }
+      nav {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        gap: 6px 12px;
+        min-height: 0;
+        padding: 10px 0 12px;
+      }
+      .nav-right { display: contents; }
+      .theme-toggle { grid-column: 2; grid-row: 1; }
+      .nav-links { grid-column: 1 / -1; justify-content: flex-start; gap: 2px 16px; font-size: 0.9rem; }
+      .nav-links a { padding: 4px 0; }   /* taller tap targets */
+      section { padding: 48px 0; scroll-margin-top: 0; }
+      h2 { font-size: 1.75rem; }
+      h3 { font-size: 1.1rem; }
+      .subtitle { font-size: 1rem; }
+      .bio { font-size: 1rem; }
+      .card { padding: 16px; }
       .hero { grid-template-columns: 1fr; gap: 28px; }
       .portrait-figure, .portrait { width: 180px; }
       .irl { flex-direction: column; gap: 20px; }
@@ -387,11 +408,12 @@
   <header>
     <nav class="container" aria-label="Primary navigation">
       <a class="brand" href="#top">Adam Murdock Gale</a>
-      <div class="nav-links">
+      <div class="nav-right">
         <button class="theme-toggle" type="button" aria-label="Switch to dark mode" title="Switch to dark mode">
           <img class="chao chao-dark" src="images/dark-chao.png" alt="" width="37" height="40">
           <img class="chao chao-hero" src="images/hero-chao.png" alt="" width="23" height="40">
         </button>
+        <div class="nav-links">
         <a href="#about">About</a>
         <a href="#education">Education</a>
         <a href="#publications">Publications</a>
@@ -399,6 +421,7 @@
         <a href="#teaching">Teaching</a>
         <a href="#irl">irl</a>
         <a href="#contact">Contact</a>
+        </div>
       </div>
     </nav>
   </header>
