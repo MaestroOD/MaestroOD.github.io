@@ -933,7 +933,44 @@
     }));
   }
 
-  G["caches/cache-sim"] = function (R) {
+  /* Exam style: fill in every line of the cache, byte by byte, then list the accesses that hit. */
+  function cacheTableProblem(R) {
+    var ways = R.pick([1, 2, 2]), sets = ways === 1 ? 4 : R.pick([2, 4]), block = ways * sets >= 8 ? R.pick([2, 4]) : R.pick([2, 4]);
+    var c = { ways: ways, sets: sets, block: block, policy: ways > 1 && R.chance(0.3) ? "fifo" : "lru" };
+    var addrs = randomAddrs(R, 10, 6 * c.sets * c.block - 1);
+    var stop = R.chance(0.35) ? R.int(5, 8) : 10;           /* sometimes: the state part-way through */
+    var sim = simulateCache(c, addrs.slice(0, stop)), full = simulateCache(c, addrs);
+    var hitList = full.steps.map(function (st, i) { return st.hit ? i + 1 : null; }).filter(function (x) { return x !== null; });
+    var fields = [], rows = [], setBits = Math.log2(c.sets);
+    sim.sets.forEach(function (lines, si) {
+      var answer = lines.map(function (start) { var b = []; for (var k = 0; k < c.block; k++) b.push(start + k); return b; });
+      fields.push({ id: "c" + si, label: "Set " + si, kind: "cacheset", ways: c.ways, block: c.block, answer: answer, size: 3 });
+      for (var w = 0; w < c.ways; w++) {
+        var row = [w === 0 ? (setBits ? bin(si, setBits) : "0") : ""];
+        for (var b = 0; b < c.block; b++) row.push({ f: "c" + si, part: w + "_" + b });
+        row.push(w === 0 ? { mark: "c" + si } : "");
+        rows.push(row);
+      }
+    });
+    fields.push({ id: "hits", label: "Accesses that hit", kind: "set", answer: hitList, size: 16 });
+    var head = ["Set"];
+    for (var b2 = 0; b2 < c.block; b2++) head.push("Byte " + b2);
+    head.push("");
+    return {
+      prompt: p("Consider " + cfgText(c) + ". It starts empty, and these byte addresses are accessed in order:") +
+        table(["Access"].concat(addrs.map(function (_, i) { return i + 1; })), [["Address"].concat(addrs)]) +
+        p("Fill in the cache " + (stop < 10 ? "<strong>after access " + stop + "</strong> (address " + addrs[stop - 1] + ")" : "<strong>after all accesses</strong>") +
+          ": write the byte addresses held in each line (lines and bytes in any order; leave unused lines blank). Then list the numbers of the accesses that hit, over all 10 accesses."),
+      table: { head: head, rows: rows, groups: c.ways },
+      wide: true,
+      fields: fields,
+      solution: simSolution(c, full) + p("Cache " + (stop < 10 ? "after access " + stop : "at the end") + ": " + sim.sets.map(function (l, si) {
+        return "set " + si + ": " + (l.length ? l.map(function (st) { return st + "–" + (st + c.block - 1); }).join(", ") : "empty");
+      }).join("; ") + ". Hits on accesses <strong>" + (hitList.length ? hitList.join(", ") : "none") + "</strong>.")
+    };
+  }
+
+  G["caches/cache-sim"] = variants([cacheTableProblem, function (R) {
     var c = cacheCfg(R), addrs = randomAddrs(R, 10, 6 * c.sets * c.block - 1), sim = simulateCache(c, addrs);
     var hits = sim.steps.filter(function (s) { return s.hit; }).length;
     var fields = sim.sets.map(function (lines, s) { return { id: "set" + s, label: "Set " + s, kind: "set", answer: lines.slice().sort(function (a, b) { return a - b; }), size: 10 }; });
@@ -946,7 +983,7 @@
         return "set " + s + ": " + (l.length ? l.map(function (b) { return b + "–" + (b + c.block - 1); }).join(", ") : "empty");
       }).join("; ") + ". Hits: <strong>" + hits + "</strong>." + (c.policy === "fifo" ? " With FIFO, a hit does not change which block is evicted next." : ""))
     };
-  };
+  }]);
 
   G["caches/hit-rate"] = function (R) {
     var c = cacheCfg(R), addrs = randomAddrs(R, 10, 5 * c.sets * c.block - 1), sim = simulateCache(c, addrs);
@@ -2005,6 +2042,22 @@
       if (isNaN(v)) return { ok: false, note: "Give a register like $t0 or $8." };
       return { ok: v === f.answer };
     },
+    /* raw: one array of cell strings per line (way). Lines and bytes may be in any order. */
+    cacheset: function (f, raw) {
+      var got = [], bad = false;
+      raw.forEach(function (cells) {
+        var vals = cells.map(function (x) { return String(x).trim(); }).filter(function (x) { return x !== "" && !/^(-|—)$/.test(x); });
+        if (!vals.length) return;
+        if (vals.length !== f.block) { bad = true; return; }
+        var nums = vals.map(parseNum);
+        if (nums.some(isNaN)) { bad = true; return; }
+        got.push(nums.sort(function (a, b) { return a - b; }).join(","));
+      });
+      if (bad) return { ok: false, note: "Fill every byte of a line, or leave the whole line blank." };
+      var want = f.answer.map(function (l) { return l.slice().sort(function (a, b) { return a - b; }).join(","); });
+      got.sort(); want.sort();
+      return { ok: got.length === want.length && got.every(function (g, i) { return g === want[i]; }) };
+    },
     bool: function (f, raw) {
       var parsed;
       try { parsed = parseBool(raw, f.vars); } catch (e) { return { ok: false, note: "Couldn't read that expression (" + e.message + ")." }; }
@@ -2017,6 +2070,11 @@
     }
   };
   function check(field, raw) {
+    if (field.kind === "cacheset") {
+      var empty = !raw || raw.every(function (cells) { return cells.every(function (x) { return String(x).trim() === ""; }); });
+      if (empty && field.answer.length) return { ok: false, blank: true };
+      return CHECKERS.cacheset(field, raw || []);
+    }
     raw = raw === undefined || raw === null ? "" : String(raw);
     if (raw.trim() === "" && field.kind !== "set") return { ok: false, blank: true };
     return CHECKERS[field.kind](field, raw);
@@ -2031,6 +2089,10 @@
       case "bits": return f.answer;
       case "reg": return REGS[f.answer];
       case "bool": return f.example;
+      case "cacheset":
+        var lines = f.answer.map(function (l) { return l.map(String); });
+        while (lines.length < f.ways) { var e = []; for (var k = 0; k < f.block; k++) e.push(""); lines.push(e); }
+        return lines;
     }
   }
   function generate(key, seed) { var g = G[key]; return g ? g(Rng(seed >>> 0)) : null; }

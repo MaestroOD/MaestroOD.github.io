@@ -85,7 +85,7 @@
     store.last[t.slug] = p.id;
     store.current = { t: t.slug, p: p.id };
     save();
-    history.replaceState(null, "", "?t=" + t.slug + "&p=" + p.id);
+    try { history.replaceState(null, "", "?t=" + t.slug + "&p=" + p.id); } catch (e) { /* browsers rate-limit this; the link is a convenience */ }
     renderMenu();
     renderProblem(false);
     toggleLabel.textContent = t.title + " › " + p.title;
@@ -93,20 +93,38 @@
   }
 
   /* ---------- problem ---------- */
-  function inputHtml(f, inline) {
-    var id = "ans-" + f.id, size = f.size || (f.kind === "number" ? 9 : f.kind === "bits" && f.width === 1 ? 2 : 14);
-    var label = inline ? " aria-label=\"" + esc(f.label || "Answer") + "\"" : "";
+  function defaultSize(f) { return f.size || (f.kind === "number" ? 9 : f.kind === "bits" && f.width === 1 ? 2 : 14); }
+  /* width: a shared width (in ch) for every box in the answer grid; part: one cell of a composite field */
+  function inputHtml(f, inline, width, part) {
+    var id = "ans-" + f.id + (part ? "__" + part : ""), size = width || defaultSize(f);
+    var label = inline ? " aria-label=\"" + esc((f.label || "Answer") + (part ? " " + part.replace("_", ", byte ") : "")) + "\"" : "";
+    var data = " data-f=\"" + f.id + "\"" + (part ? " data-part=\"" + part + "\"" : "");
+    var style = " style=\"width:" + (size + 2) + "ch\"";
     var ctl;
     if (f.kind === "choice") {
-      ctl = "<select id=\"" + id + "\" data-f=\"" + f.id + "\"" + label + "><option value=\"\">—</option>" +
+      ctl = "<select id=\"" + id + "\"" + data + label + (width ? style : "") + "><option value=\"\">—</option>" +
         f.options.map(function (o) { return "<option>" + esc(o) + "</option>"; }).join("") + "</select>";
     } else {
-      ctl = "<input id=\"" + id + "\" data-f=\"" + f.id + "\" type=\"text\" autocomplete=\"off\" autocapitalize=\"off\" spellcheck=\"false\"" +
-        (f.kind === "number" ? " inputmode=\"decimal\"" : f.kind === "bits" || f.kind === "set" ? " inputmode=\"numeric\"" : "") +
-        " style=\"width:" + (size + 2) + "ch\"" + label + ">";
+      ctl = "<input id=\"" + id + "\"" + data + " type=\"text\" autocomplete=\"off\" autocapitalize=\"off\" spellcheck=\"false\"" +
+        (f.kind === "number" ? " inputmode=\"decimal\"" : f.kind === "bits" || f.kind === "set" || f.kind === "cacheset" ? " inputmode=\"numeric\"" : "") +
+        style + label + ">";
     }
+    if (part) return ctl;
     return "<span class=\"answer-cell\">" + ctl + (f.suffix ? " <span class=\"meta\">" + esc(f.suffix) + "</span>" : "") +
       "<span class=\"mark\" id=\"mark-" + f.id + "\" aria-hidden=\"true\"></span></span>";
+  }
+  function valueKey(el) { return el.getAttribute("data-f") + (el.getAttribute("data-part") ? "__" + el.getAttribute("data-part") : ""); }
+  function inputsOf(f) { return body.querySelectorAll("[data-f=\"" + f.id + "\"]"); }
+  /* What the student typed for a field: a string, or for a cache set one array of cells per line */
+  function rawValue(f) {
+    if (f.kind !== "cacheset") { var el = document.getElementById("ans-" + f.id); return el ? el.value : ""; }
+    var lines = [];
+    for (var w = 0; w < f.ways; w++) {
+      var cells = [];
+      for (var b = 0; b < f.block; b++) { var c = document.getElementById("ans-" + f.id + "__" + w + "_" + b); cells.push(c ? c.value : ""); }
+      lines.push(cells);
+    }
+    return lines;
   }
 
   function renderProblem(focus) {
@@ -124,9 +142,11 @@
     if (gen.table) {
       html += "<div class=\"table-wrap\"><table class=\"problem-table answer-table\"><thead><tr>" +
         gen.table.head.map(function (h) { return "<th>" + h + "</th>"; }).join("") + "</tr></thead><tbody>" +
-        gen.table.rows.map(function (r) {
-          return "<tr>" + r.map(function (c) {
-            if (c && typeof c === "object") { placed[c.f] = true; return "<td>" + inputHtml(byId[c.f], true) + "</td>"; }
+        gen.table.rows.map(function (r, ri) {
+          var groupStart = gen.table.groups > 1 && ri % gen.table.groups === 0 && ri > 0;
+          return "<tr" + (groupStart ? " class=\"group-start\"" : "") + ">" + r.map(function (c) {
+            if (c && typeof c === "object" && c.mark) return "<td class=\"mark-cell\"><span class=\"mark\" id=\"mark-" + c.mark + "\" aria-hidden=\"true\"></span></td>";
+            if (c && typeof c === "object") { placed[c.f] = true; return "<td>" + inputHtml(byId[c.f], true, c.part ? defaultSize(byId[c.f]) : 0, c.part) + "</td>"; }
             return "<td>" + c + "</td>";
           }).join("") + "</tr>";
         }).join("") + "</tbody></table></div>";
@@ -140,11 +160,15 @@
       }).join("") + "</div>";
     }
     var loose = gen.fields.filter(function (f) { return !placed[f.id]; });
+    /* every box in the grid gets the same width, so the column looks even */
+    var gridWidth = Math.min(30, Math.max.apply(null, [9].concat(loose.filter(function (f) { return !f.wide; }).map(function (f) {
+      return f.kind === "choice" ? Math.max.apply(null, f.options.map(function (o) { return o.length; })) + 3 : defaultSize(f);
+    }))));
     if (loose.length) {
       /* one shared grid, so every answer box lines up in the same column */
       html += "<div class=\"answer-grid\">" + loose.map(function (f) {
         return "<label class=\"" + (f.wide ? "is-wide" : "") + "\" for=\"ans-" + f.id + "\">" + esc(f.label) + "</label>" +
-          "<div class=\"answer-slot" + (f.wide ? " is-wide" : "") + "\">" + inputHtml(f, false) + "</div>";
+          "<div class=\"answer-slot" + (f.wide ? " is-wide" : "") + "\">" + inputHtml(f, false, f.wide ? 0 : gridWidth) + "</div>";
       }).join("") + "</div>";
     }
     html += "</div><div class=\"actions\">" +
@@ -156,9 +180,9 @@
     body.innerHTML = html;
 
     // restore typed answers
-    gen.fields.forEach(function (f) {
-      var el = document.getElementById("ans-" + f.id);
-      if (el && item.values[f.id] !== undefined) el.value = item.values[f.id];
+    body.querySelectorAll("[data-f]").forEach(function (el) {
+      var k = valueKey(el);
+      if (item.values[k] !== undefined) el.value = item.values[k];
     });
     if (item.checked) check(true);
     if (item.shown) reveal();
@@ -188,13 +212,13 @@
   function onEdit(e) {
     var id = e.target.getAttribute("data-f");
     if (!id) return;
-    state.item.values[id] = e.target.value;
+    state.item.values[valueKey(e.target)] = e.target.value;
     if (state.item.checked) {
       state.item.checked = false;
       document.getElementById("feedback").className = "feedback";
       document.getElementById("feedback").innerHTML = "";
     }
-    e.target.classList.remove("is-right", "is-wrong");
+    inputsOf({ id: id }).forEach(function (el) { el.classList.remove("is-right", "is-wrong"); });
     var mark = document.getElementById("mark-" + id);
     if (mark) mark.textContent = "";
     save();
@@ -203,12 +227,14 @@
   function check(quiet) {
     var gen = state.gen, right = 0, blank = 0, notes = [];
     gen.fields.forEach(function (f) {
-      var el = document.getElementById("ans-" + f.id);
-      var res = P.check(f, el.value);
-      el.classList.toggle("is-right", res.ok);
-      el.classList.toggle("is-wrong", !res.ok);
-      el.setAttribute("aria-invalid", res.ok ? "false" : "true");
-      document.getElementById("mark-" + f.id).textContent = res.ok ? "✓" : res.blank ? "" : "✗";
+      var res = P.check(f, rawValue(f));
+      inputsOf(f).forEach(function (el) {
+        el.classList.toggle("is-right", res.ok);
+        el.classList.toggle("is-wrong", !res.ok);
+        el.setAttribute("aria-invalid", res.ok ? "false" : "true");
+      });
+      var mk = document.getElementById("mark-" + f.id);
+      if (mk) mk.textContent = res.ok ? "✓" : res.blank ? "" : "✗";
       if (res.ok) right++;
       if (res.blank) blank++;
       if (res.note && notes.indexOf(res.note) === -1) notes.push(res.note);
@@ -244,7 +270,7 @@
     sol.innerHTML = "<h4>Solution</h4>" + state.gen.solution;
     sol.hidden = false;
     /* wide answer tables need the full width, so their solution goes underneath instead */
-    if (!(state.gen.table && state.gen.table.head.length >= 5)) document.getElementById("problem-grid").classList.add("has-solution");
+    if (!state.gen.wide && !(state.gen.table && state.gen.table.head.length >= 5)) document.getElementById("problem-grid").classList.add("has-solution");
   }
 
   /* ---------- exam cheat sheet: the [Cheat Sheet] button beside the title ---------- */
