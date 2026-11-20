@@ -783,3 +783,6 @@ body.app .brand { font-size: 1.1rem; }
   .practice-layout { grid-template-columns: 210px minmax(0, 1fr); gap: 14px; }
   .practice-menu { font-size: 0.86rem; }
 }
+
+/* units after an answer box (ns, ps, %, …) match the surrounding text */
+.answer-cell .meta { font-size: inherit; color: var(--body-text); }

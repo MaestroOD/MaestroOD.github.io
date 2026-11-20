@@ -258,7 +258,8 @@
       if (!quiet) fb.scrollIntoView({ block: "nearest", behavior: "smooth" });
       return;
     }
-    if (!quiet && !blank && !state.item.scored) { store.streak = 0; save(); }
+    /* a wrong answer knocks the rank back one place (e.g. Jammin'! → Nice!) */
+    if (!quiet && !blank && !state.item.scored) { store.streak = Math.max(0, (store.streak || 0) - 1); save(); }
     if (!quiet && right + blank < n) spillRings();
     fb.className = "feedback is-wrong";
     var msg = "<strong>not quite.</strong> " + (n > 1 ? right + " of " + n + " correct." : "") +

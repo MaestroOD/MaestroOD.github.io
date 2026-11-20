@@ -71,6 +71,10 @@
   function hex(n, w) { var s = (n >>> 0).toString(16).toUpperCase(); while (s.length < w) s = "0" + s; return "0x" + s; }
   function p(s) { return "<p>" + s + "</p>"; }
   function ul(items) { return "<ul>" + items.map(function (i) { return "<li>" + i + "</li>"; }).join("") + "</ul>"; }
+  /* 2^n written as 2ⁿ */
+  function pow2(n) { return "2" + String(n).split("").map(function (d) { return "⁰¹²³⁴⁵⁶⁷⁸⁹"[+d]; }).join(""); }
+  /* blocks start at multiples of the block size */
+  function alignNote(B) { return "Blocks are aligned: bytes 0–" + (B - 1) + " form block 0, bytes " + B + "–" + (2 * B - 1) + " form block 1, and so on."; }
   /* "a 6-bit" but "an 8-bit", "an 11-bit", "an 18-bit" */
   function aN(n) { return /^(8|11|18)/.test(String(n)) ? "an " + n : "a " + n; }
   function sum(a) { return a.reduce(function (s, x) { return s + x; }, 0); }
@@ -827,35 +831,38 @@
 
   G["memory/miss-types"] = variants([
     function (R) {
-      var lines = 4, seq, kinds;
+      var lines = 4, B = R.pick([2, 4]), seq, kinds;
       R.until(function () {
         seq = [];
         for (var i = 0; i < 8; i++) seq.push(seq.length && R.chance(0.5) ? R.pick(seq) : R.int(0, 11));
         kinds = classifyMisses(lines, seq); return true;
       }, function () { return kinds.indexOf("conflict miss") !== -1 && kinds.indexOf("hit") !== -1; });
+      var addrs = seq.map(function (blk) { return blk * B + R.int(0, B - 1); });
       var opts = ["hit", "cold miss", "conflict miss", "capacity miss"];
       return {
-        prompt: p("A direct-mapped cache holds 4 blocks (block b goes in line b mod 4) and starts empty. Classify each access to the block numbers below.") +
+        prompt: p("A direct-mapped cache holds 4 blocks of " + B + " bytes and starts empty. " + alignNote(B) + " Block k goes in line k mod 4. Classify each access to the byte addresses below.") +
           p("A miss is a <em>conflict</em> miss if a fully associative LRU cache of the same size would have hit, and a <em>capacity</em> miss otherwise. The first access to a block is a <em>cold</em> miss."),
-        table: { head: ["Access", "Block", "Result"], rows: seq.map(function (b, i) { return [i + 1, b, { f: "k" + i }]; }) },
+        table: { head: ["Access", "Address", "Result"], rows: addrs.map(function (a2, i) { return [i + 1, a2, { f: "k" + i }]; }) },
         fields: kinds.map(function (k, i) { return choice("k" + i, "", opts, k); }),
-        solution: table(["Access", "Block", "Line", "Result"], seq.map(function (b, i) { return [i + 1, b, b % lines, "<strong>" + kinds[i] + "</strong>"]; }))
+        solution: table(["Access", "Address", "Block (bytes)", "Line", "Result"], seq.map(function (blk, i) {
+          return [i + 1, addrs[i], blk + " (" + blk * B + "–" + (blk * B + B - 1) + ")", blk % lines, "<strong>" + kinds[i] + "</strong>"];
+        }))
       };
     },
     function (R) {
-      var lines = R.pick([2, 4]), seq = [];
+      var lines = R.pick([2, 4]), B = R.pick([2, 4]), seq = [];
       for (var i = 0; i < 10; i++) seq.push(seq.length && R.chance(0.5) ? R.pick(seq) : R.int(0, 9));
+      var addrs = seq.map(function (blk) { return blk * B + R.int(0, B - 1); });
       var kinds = classifyMisses(lines, seq), cnt = function (k) { return kinds.filter(function (x) { return x === k; }).length; };
       return {
-        prompt: p("A direct-mapped cache holds " + lines + " blocks and starts empty. The processor accesses these block numbers in order:") + p(code(seq.join(", "))) +
+        prompt: p("A direct-mapped cache holds " + lines + " blocks of " + B + " bytes and starts empty. " + alignNote(B) + " The processor accesses these byte addresses in order:") + p(code(addrs.join(", "))) +
           p("How many hits and how many cold misses occur? How many of the other misses are conflict misses (a fully associative LRU cache of the same size would have hit)?"),
         fields: [num("h", "Hits", cnt("hit")), num("c", "Cold misses", cnt("cold miss")), num("x", "Conflict misses", cnt("conflict miss"))],
-        solution: table(["Block", "Line", "Result"], seq.map(function (b, i) { return [b, b % lines, kinds[i]]; })) +
+        solution: table(["Address", "Block (bytes)", "Line", "Result"], seq.map(function (blk, i) { return [addrs[i], blk + " (" + blk * B + "–" + (blk * B + B - 1) + ")", blk % lines, kinds[i]]; })) +
           p("Hits " + cnt("hit") + ", cold " + cnt("cold miss") + ", conflict " + cnt("conflict miss") + ", capacity " + cnt("capacity miss") + ".")
       };
     }
   ]);
-
 
   /* ----- 3. Cache organization ----- */
   /* Exam style: break each address into tag / index / offset and say whether it hits. */
@@ -869,17 +876,19 @@
     var sim = simulateCache({ ways: 1, sets: sets, block: block, policy: "lru" }, addrs), fields = [], rows = [];
     addrs.forEach(function (a, i) {
       var off = a & (block - 1), idx = (a >> ob) & (sets - 1), tag = a >> (ob + ib);
-      fields.push(num("t" + i, "tag", tag, { size: 4 }), num("i" + i, "index", idx, { size: 4 }), num("o" + i, "offset", off, { size: 4 }),
+      fields.push({ id: "t" + i, label: "tag", kind: "bits", width: tb, answer: bin(tag, tb), size: Math.max(4, tb + 1) },
+        { id: "i" + i, label: "index", kind: "bits", width: ib, answer: bin(idx, ib), size: Math.max(4, ib + 1) },
+        { id: "o" + i, label: "offset", kind: "bits", width: ob, answer: bin(off, ob), size: Math.max(4, ob + 1) },
         choice("h" + i, "result", ["hit", "miss"], sim.steps[i].hit ? "hit" : "miss"));
       rows.push([code(hex(a, m / 4)), { f: "t" + i }, { f: "i" + i }, { f: "o" + i }, { f: "h" + i }]);
     });
     return {
-      prompt: p("A direct-mapped cache uses " + m + "-bit byte addresses: a " + tb + "-bit tag, a " + ib + "-bit index and a " + ob + "-bit offset. It starts empty. For each address in order, give its tag, index and offset (in decimal) and whether it hits."),
+      prompt: p("A direct-mapped cache uses " + m + "-bit byte addresses: a " + tb + "-bit tag, a " + ib + "-bit index and a " + ob + "-bit offset. It starts empty. For each address in order, write its tag, index and offset bits and say whether it hits."),
       table: { head: ["Address", "Tag", "Index", "Offset", "Hit/miss"], rows: rows },
       fields: fields, wide: true,
       solution: table(["Address", "Binary", "Tag", "Index", "Offset", "Result"], addrs.map(function (a, i) {
         return [hex(a, m / 4), code(bin(a >> (ob + ib), tb) + " " + bin((a >> ob) & (sets - 1), ib) + " " + bin(a & (block - 1), ob)),
-          a >> (ob + ib), (a >> ob) & (sets - 1), a & (block - 1), "<strong>" + (sim.steps[i].hit ? "hit" : "miss") + "</strong>"];
+          bin(a >> (ob + ib), tb), bin((a >> ob) & (sets - 1), ib), bin(a & (block - 1), ob), "<strong>" + (sim.steps[i].hit ? "hit" : "miss") + "</strong>"];
       })) + p("An access hits when its line already holds the same tag.")
     };
   }
@@ -894,8 +903,12 @@
       return {
         prompt: p("A " + kb + " " + org + " cache has " + block + "-byte blocks. Addresses are " + abits + " bits and refer to bytes. How many bits are used for the offset, index and tag?"),
         fields: [num("o", "Offset bits", ob), num("i", "Index bits", ib), num("t", "Tag bits", tb)],
-        solution: p("Blocks = " + size + " ÷ " + block + " = " + blocks + "; sets = " + blocks + " ÷ " + assoc + " = " + sets + ".") +
-          p("Offset = log₂ " + block + " = <strong>" + ob + "</strong>; index = log₂ " + sets + " = <strong>" + ib + "</strong>; tag = " + abits + " − " + ob + " − " + ib + " = <strong>" + tb + "</strong>")
+        solution: (function () {
+          var c = Math.log2(size), a = Math.log2(assoc);
+          return p("Capacity " + kb.replace("-byte", " bytes") + " = " + pow2(c) + " bytes; blocks are " + block + " = " + pow2(ob) + " bytes, so there are " + pow2(c) + " ÷ " + pow2(ob) + " = " + pow2(c - ob) + " = " + blocks + " blocks.") +
+            p(assoc === 1 ? "Direct-mapped: one block per set, so " + pow2(ib) + " sets." : assoc + "-way: " + pow2(c - ob) + " ÷ " + pow2(a) + " = " + pow2(ib) + " = " + sets + " sets.") +
+            p("Offset = <strong>" + ob + "</strong> bits (" + pow2(ob) + " bytes per block); index = <strong>" + ib + "</strong> bits (" + pow2(ib) + " sets); tag = " + abits + " − " + ob + " − " + ib + " = <strong>" + tb + "</strong> bits.");
+        })()
       };
     },
     function (R) {
@@ -904,17 +917,12 @@
       return {
         prompt: p("A 32-bit machine has a " + (assoc === 1 ? "direct-mapped" : assoc + "-way set-associative") + " cache holding " + words + " words (1 word = 4 bytes). Each block holds " + bw + " words. Addresses refer to bytes. How long are the tag, set index and block offset?"),
         fields: [num("t", "Tag bits", tb), num("i", "Index bits", ib), num("o", "Offset bits", ob)],
-        solution: p("Capacity = " + words + " × 4 = " + bytes + " bytes; block = " + bw + " × 4 = " + block + " bytes; sets = " + bytes + " ÷ " + block + " ÷ " + assoc + " = " + sets + ".") +
-          p("Offset = <strong>" + ob + "</strong>, index = <strong>" + ib + "</strong>, tag = 32 − " + ob + " − " + ib + " = <strong>" + tb + "</strong>")
-      };
-    },
-    function (R) {
-      var ob = R.int(2, 4), ib = R.int(2, 4), tb = R.int(2, 6), w = ob + ib + tb, addr = R.int(0, Math.pow(2, w) - 1);
-      var off = addr & ((1 << ob) - 1), idx = (addr >> ob) & ((1 << ib) - 1), tag = addr >> (ob + ib);
-      return {
-        prompt: p("A cache uses " + w + "-bit byte addresses split into a " + tb + "-bit tag, a " + ib + "-bit set index and a " + ob + "-bit block offset. Split the address " + code(bin(addr, w)) + " (binary) into its fields, in decimal."),
-        fields: [num("t", "Tag", tag), num("i", "Set index", idx), num("o", "Offset", off)],
-        solution: p(code(bin(addr, w)) + " = " + code(bin(tag, tb)) + " | " + code(bin(idx, ib)) + " | " + code(bin(off, ob)) + " → tag <strong>" + tag + "</strong>, set <strong>" + idx + "</strong>, offset <strong>" + off + "</strong>")
+        solution: (function () {
+          var w = Math.log2(words), c = w + 2, a = Math.log2(assoc);
+          return p("Capacity = " + pow2(w) + " words × " + pow2(2) + " bytes = " + pow2(c) + " bytes; a block is " + bw + " words = " + pow2(Math.log2(bw)) + " × " + pow2(2) + " = " + pow2(ob) + " bytes.") +
+            p("Sets = " + pow2(c) + " ÷ " + pow2(ob) + (assoc > 1 ? " ÷ " + pow2(a) : "") + " = " + pow2(ib) + " = " + sets + ".") +
+            p("Offset = <strong>" + ob + "</strong>, index = <strong>" + ib + "</strong>, tag = 32 − " + ob + " − " + ib + " = <strong>" + tb + "</strong>");
+        })()
       };
     },
     function (R) {
@@ -923,7 +931,8 @@
       return {
         prompt: p("A " + (assoc === 1 ? "direct-mapped" : assoc + "-way set-associative") + " cache uses 32-bit byte addresses with a " + tb + "-bit tag, a " + ib + "-bit index and a " + ob + "-bit offset. What is the block size, and what is the capacity in bytes?"),
         fields: [num("b", "Block size", Math.pow(2, ob), { suffix: "bytes" }), num("c", "Capacity", size, { suffix: "bytes" })],
-        solution: p("Block = 2^" + ob + " = <strong>" + Math.pow(2, ob) + "</strong> bytes; sets = 2^" + ib + " = " + Math.pow(2, ib) + "; capacity = " + Math.pow(2, ob) + " × " + Math.pow(2, ib) + " × " + assoc + " = <strong>" + size + "</strong> bytes")
+        solution: p("Block = " + pow2(ob) + " = <strong>" + Math.pow(2, ob) + "</strong> bytes; sets = " + pow2(ib) + (assoc > 1 ? "; ways = " + pow2(Math.log2(assoc)) : "") + ".") +
+          p("Capacity = " + pow2(ob) + " × " + pow2(ib) + (assoc > 1 ? " × " + pow2(Math.log2(assoc)) : "") + " = " + pow2(ob + ib + Math.log2(assoc)) + " = <strong>" + size + "</strong> bytes.")
       };
     }
   ]);
@@ -972,7 +981,7 @@
     for (var b2 = 0; b2 < c.block; b2++) head.push("Byte " + b2);
     head.push("");
     return {
-      prompt: p("Consider " + cfgText(c) + ". It starts empty, and these byte addresses are accessed in order:") +
+      prompt: p("Consider " + cfgText(c) + ". It starts empty. " + alignNote(c.block) + " These byte addresses are accessed in order:") +
         table(["Access"].concat(addrs.map(function (_, i) { return i + 1; })), [["Address"].concat(addrs)]) +
         p("Fill in the cache " + (stop < 10 ? "<strong>after access " + stop + "</strong> (address " + addrs[stop - 1] + ")" : "<strong>after all accesses</strong>") +
           ": write the byte addresses held in each line (lines and bytes in any order; leave unused lines blank). Then list the numbers of the accesses that hit, over all 10 accesses."),
@@ -991,7 +1000,7 @@
     var fields = sim.sets.map(function (lines, s) { return { id: "set" + s, label: "Set " + s, kind: "set", answer: lines.slice().sort(function (a, b) { return a - b; }), size: 10 }; });
     fields.push(num("hits", "Number of hits", hits));
     return {
-      prompt: p("Consider " + cfgText(c) + ". It starts empty, and these byte addresses are accessed in order:") + p(code(addrs.join(", "))) +
+      prompt: p("Consider " + cfgText(c) + ". It starts empty. " + alignNote(c.block) + " These byte addresses are accessed in order:") + p(code(addrs.join(", "))) +
         p("Which blocks are in each set at the end? Give the lowest byte address of each block, separated by commas (any order; blank if empty)."),
       fields: fields,
       solution: simSolution(c, sim) + p("Final contents: " + sim.sets.map(function (l, s) {
@@ -1006,7 +1015,7 @@
     var fields = sim.steps.map(function (s, i) { return choice("h" + i, "", ["hit", "miss"], s.hit ? "hit" : "miss"); });
     fields.push(num("rate", "Hit rate", hits * 10, { suffix: "%" }), num("cold", "Cold misses", cold));
     return {
-      prompt: p("Consider " + cfgText(c) + ". It starts empty. Mark each access below as a hit or a miss, then give the hit rate and the number of cold misses."),
+      prompt: p("Consider " + cfgText(c) + ". It starts empty. " + alignNote(c.block) + " Mark each access below as a hit or a miss, then give the hit rate and the number of cold misses."),
       table: { head: ["Access", "Address", "Result"], rows: addrs.map(function (a, i) { return [i + 1, a, { f: "h" + i }]; }) },
       fields: fields,
       solution: simSolution(c, sim) + p("Hit rate = " + hits + " ÷ 10 = <strong>" + hits * 10 + "%</strong>; cold misses (first touch of a block): <strong>" + cold + "</strong>")
