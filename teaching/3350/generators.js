@@ -1241,35 +1241,35 @@
     var s = R.int(0, 1); return { S: s, R: s ? 0 : R.int(0, 1) };
   }
   var FF_RULE = { JK: "Q<sub>next</sub> = J·<span class=\"ov\">Q</span> + <span class=\"ov\">K</span>·Q (J = K = 1 toggles)", T: "Q<sub>next</sub> = T xor Q", D: "Q<sub>next</sub> = D", SR: "Q<sub>next</sub> = S + <span class=\"ov\">R</span>·Q (S sets, R resets, S = R = 1 not allowed)" };
+  /* One flip-flop per problem. Sequences use a vertical table: one row per clock cycle. */
   G["sequential/flip-flops"] = variants([
     function (R) {
-      var type = R.pick(["JK", "T", "D", "SR"]), q = R.int(0, 1), q0 = q, ins = [], cur = [], next = [];
-      for (var c = 0; c < 5; c++) { var i = ffInputs(R, type), nq = ffNext(type, q, i); ins.push(i); cur.push(q); next.push(nq); q = nq; }
+      var type = R.pick(["JK", "T", "D", "SR"]), q = R.int(0, 1), q0 = q, n = 5, ins = [], cur = [], next = [];
+      for (var c = 0; c < n; c++) { var i = ffInputs(R, type), nq = ffNext(type, q, i); ins.push(i); cur.push(q); next.push(nq); q = nq; }
       var names = Object.keys(ins[0]), fields = [], rows = [];
-      rows.push(["Q<sub>current</sub>"].concat(cur.map(function (v, c2) { if (c2 === 0) return v; fields.push(bit("q" + c2, v)); return { f: "q" + c2 }; })));
-      names.forEach(function (nm) { rows.push([nm].concat(ins.map(function (x) { return x[nm]; }))); });
-      rows.push(["Q<sub>next</sub>"].concat(next.map(function (v, c3) { fields.push(bit("n" + c3, v)); return { f: "n" + c3 }; })));
+      for (var c2 = 0; c2 < n; c2++) {
+        var row = [c2];
+        if (c2 === 0) row.push(cur[0]); else { fields.push(bit("q" + c2, cur[c2])); row.push({ f: "q" + c2 }); }
+        names.forEach(function (nm) { row.push(ins[c2][nm]); });
+        fields.push(bit("n" + c2, next[c2])); row.push({ f: "n" + c2 });
+        rows.push(row);
+      }
       return {
-        prompt: p("A " + type + " flip-flop starts with Q = " + q0 + ". Complete the table; each cycle's Q<sub>next</sub> is the next cycle's Q<sub>current</sub>."),
-        table: { head: ["Clock cycle", 0, 1, 2, 3, 4], rows: rows },
+        prompt: p((type === "SR" ? "An " : "A ") + type + " flip-flop starts with Q = " + q0 + ". Fill in Q and Q<sub>next</sub> for each clock cycle; Q<sub>next</sub> in one row becomes Q in the next row."),
+        table: { head: ["Cycle", "Q"].concat(names).concat(["Q<sub>next</sub>"]), rows: rows },
         fields: fields,
-        solution: p(FF_RULE[type] + ".") + table(["Cycle", "Q"].concat(names).concat(["Q<sub>next</sub>"]), ins.map(function (x, c4) {
-          return [c4, cur[c4]].concat(names.map(function (nm) { return x[nm]; })).concat(["<strong>" + next[c4] + "</strong>"]);
+        solution: p(FF_RULE[type] + ".") + table(["Cycle", "Q"].concat(names).concat(["Q<sub>next</sub>"]), ins.map(function (x, c3) {
+          return [c3, cur[c3]].concat(names.map(function (nm) { return x[nm]; })).concat(["<strong>" + next[c3] + "</strong>"]);
         }))
       };
     },
     function (R) {
-      var rows = [], fields = [], sol = [];
-      for (var k = 0; k < 4; k++) {
-        var type = R.pick(["JK", "T", "D", "SR"]), q = R.int(0, 1), i = ffInputs(R, type), nq = ffNext(type, q, i);
-        var inText = Object.keys(i).map(function (nm) { return nm + " = " + i[nm]; }).join(", ");
-        rows.push([type, q, inText, { f: "n" + k }]); fields.push(bit("n" + k, nq));
-        sol.push(type + ": Q = " + q + ", " + inText + " → <strong>" + nq + "</strong>");
-      }
+      var type = R.pick(["JK", "T", "D", "SR"]), q = R.int(0, 1), i = ffInputs(R, type), nq = ffNext(type, q, i);
+      var inText = Object.keys(i).map(function (nm) { return nm + " = " + i[nm]; }).join(", ");
       return {
-        prompt: p("Give the next state of each flip-flop after one clock edge."),
-        table: { head: ["Flip-flop", "Q", "Inputs", "Q<sub>next</sub>"], rows: rows },
-        fields: fields, solution: ul(sol)
+        prompt: p((type === "SR" ? "An " : "A ") + type + " flip-flop holds Q = " + q + ". Its inputs are " + inText + ". What is Q after the next clock edge?"),
+        fields: [{ id: "n", label: "Q after the edge", kind: "bits", width: 1, answer: String(nq), size: 2 }],
+        solution: p(FF_RULE[type] + ", so Q<sub>next</sub> = <strong>" + nq + "</strong>.")
       };
     }
   ]);
