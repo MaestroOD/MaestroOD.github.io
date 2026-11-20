@@ -462,7 +462,7 @@ body.app > footer { display: none; }
 body.app header nav { min-height: 52px; }
 body.app header { border-bottom-width: 2px; }
 body.app .brand { font-size: 1.1rem; }
-.practice-app .container { width: min(1240px, calc(100% - 32px)); }
+.practice-app .container { width: min(1600px, calc(100% - 32px)); }
 .menu-toggle { display: none; }
 
 .practice-layout {
@@ -513,10 +513,14 @@ body.app .brand { font-size: 1.1rem; }
 
 /* Work on the left, solution on the right once it is shown (stacks on narrow screens) */
 .problem-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 28px; align-items: start; }
-@media (min-width: 1100px) {
-  .problem-grid.has-solution { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }
-  .problem-grid.has-solution .solution { margin-top: 0; padding-left: 24px; border-left: 1px solid var(--line); }
-}
+/* (practice.js decides which of these fits the screen) */
+.problem-grid.has-solution { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }
+.problem-grid.has-solution .solution { margin-top: 0; padding-left: 24px; border-left: 1px solid var(--line); }
+.problem-grid.split .problem-work { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, max-content); gap: 0 28px; align-items: start; }
+.problem-grid.split .problem-prompt { grid-column: 1; grid-row: 1 / span 2; }
+.problem-grid.split .answer-form, .problem-grid.split .feedback { grid-column: 2; }
+.problem-grid.split .answer-area { flex-direction: column; }
+.problem-grid.has-solution.split { grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); }
 
 /* A table of answers and the remaining answer boxes sit side by side when there is room */
 .answer-area { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0 36px; }
@@ -758,3 +762,24 @@ body.app .brand { font-size: 1.1rem; }
   50% { transform: scaleX(0.18); }
 }
 .answer-form .answer-table td select { width: 100%; min-width: 4.5em; }
+
+/* Short screens (e.g. 1366x768 laptops): tighten spacing, keep text readable */
+@media (max-height: 760px) and (min-width: 641px) {
+  .problem-panel { padding: 10px 18px; font-size: 1rem; }
+  .problem-panel h2 { font-size: 1.3rem; }
+  .problem-head { margin-bottom: 6px; }
+  .problem-prompt p { margin-bottom: 8px; }
+  .problem-table th, .problem-table td { padding: 4px 12px; }
+  .answer-table th, .answer-table td { padding: 2px 7px; }
+  .answer-grid { gap: 7px 14px; margin-top: 8px; }
+  .answer-form select, .answer-form input { padding: 3px 8px; }
+  .problem-code { padding: 8px 12px; margin-bottom: 10px; }
+  .fsm { max-width: 300px; }
+  .actions { margin-top: 14px; }
+  .feedback { margin-top: 10px; padding: 8px 14px; }
+  .practice-menu { font-size: 0.88rem; line-height: 1.35; }
+}
+@media (max-width: 1100px) and (min-width: 641px) {
+  .practice-layout { grid-template-columns: 210px minmax(0, 1fr); gap: 14px; }
+  .practice-menu { font-size: 0.86rem; }
+}

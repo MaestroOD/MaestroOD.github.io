@@ -1381,7 +1381,7 @@
         prompt: p("f, g and h are in " + code(F) + ", " + code(Gg) + " and " + code(H) + ". Fill in the blanks to translate:") + pre(["f = (g << " + a + ") + (h - " + b + ");"]),
         code: [["sll  $t0, " + Gg + ", ", { f: "a" }], ["addi $t1, " + H + ", ", { f: "b" }], [{ f: "op" }, "  " + F + ", $t0, $t1"]],
         fields: [num("a", "shift amount", a, { size: 3 }), num("b", "immediate", -b, { size: 4 }), choice("op", "instruction", MN, "add")],
-        solution: pre(["sll  $t0, " + Gg + ", " + a, "addi $t1, " + H + ", " + -b + "    # subi is a pseudo-instruction; it becomes addi with a negative immediate", "add  " + F + ", $t0, $t1"])
+        solution: pre(["sll  $t0, " + Gg + ", " + a, "addi $t1, " + H + ", " + -b + "   # subi is a pseudo-op for this", "add  " + F + ", $t0, $t1"])
       };
     },
     function (R) {

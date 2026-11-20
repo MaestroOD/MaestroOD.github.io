@@ -187,6 +187,7 @@
     });
     if (item.checked) check(true);
     if (item.shown) reveal();
+    fitLayout();
 
     var form = document.getElementById("answer-form");
     form.addEventListener("submit", function (e) { e.preventDefault(); check(false); });
@@ -264,6 +265,7 @@
       (blank ? " fill in every answer." : "");
     if (notes.length) msg += "<ul>" + notes.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + "</ul>";
     fb.innerHTML = msg;
+    fitLayout();
     if (!quiet) fb.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }
 
@@ -271,9 +273,49 @@
     var sol = document.getElementById("solution");
     sol.innerHTML = "<h4>solution</h4>" + state.gen.solution;
     sol.hidden = false;
-    /* wide answer tables need the full width, so their solution goes underneath instead */
-    if (!state.gen.wide && !(state.gen.table && state.gen.table.head.length >= 5)) document.getElementById("problem-grid").classList.add("has-solution");
+    fitLayout();
   }
+
+  /* ---------- fit the problem to the screen ----------
+     Try a few arrangements, best first, and keep the first one where nothing needs scrolling and
+     nothing is squeezed sideways. "side": solution beside the work. "split": prompt on the left,
+     answer boxes on the right. Re-run after rendering, checking, revealing and resizing. */
+  function overflowOf() {
+    var grid = document.getElementById("problem-grid"), sideways = 0;
+    grid.querySelectorAll(".problem-table, .problem-code, .table-wrap, .answer-grid, svg").forEach(function (e) {
+      sideways = Math.max(sideways, e.scrollWidth - e.clientWidth, e.getBoundingClientRect().right - e.parentElement.getBoundingClientRect().right);
+    });
+    /* how far the student's own work (answers, buttons, feedback) runs below the visible panel */
+    var work = grid.querySelector(".problem-work"), pr = panel.getBoundingClientRect();
+    var workHidden = Math.max(0, work.getBoundingClientRect().bottom - (pr.bottom - 12));
+    return { down: panel.scrollHeight - panel.clientHeight, sideways: sideways, workHidden: workHidden };
+  }
+  function fitLayout() {
+    var grid = document.getElementById("problem-grid");
+    if (!grid) return;
+    var work = grid.querySelector(".problem-work"), sol = document.getElementById("solution");
+    var canSplit = !!work.querySelector(".table-wrap, .code-blanks, .answer-grid") && !!work.querySelector(".problem-prompt :is(table, pre, svg)");
+    var shown = !sol.hidden, phone = window.innerWidth <= 640;
+    var options = [];
+    if (shown && !phone) { options.push(["has-solution"]); if (canSplit) options.push(["has-solution", "split"]); }
+    if (canSplit && !phone) options.push(["split"]);
+    options.push([]);
+    var best = null, keepTop = panel.scrollTop;
+    panel.scrollTop = 0;
+    for (var i = 0; i < options.length; i++) {
+      grid.classList.remove("has-solution", "split");
+      options[i].forEach(function (c) { grid.classList.add(c); });
+      /* work that is cut off counts far more than a solution that needs scrolling */
+      var o = overflowOf(), bad = Math.max(0, o.down) + o.workHidden * 50 + (o.sideways > 2 ? 1e7 : 0);
+      if (!best || bad < best.bad) best = { bad: bad, opt: options[i] };
+      if (bad === 0) break;
+    }
+    grid.classList.remove("has-solution", "split");
+    best.opt.forEach(function (c) { grid.classList.add(c); });
+    panel.scrollTop = keepTop;
+  }
+  var fitTimer = null;
+  window.addEventListener("resize", function () { clearTimeout(fitTimer); fitTimer = setTimeout(fitLayout, 120); });
 
   /* ---------- exam cheat sheet: the [Cheat Sheet] button beside the title ---------- */
   var CHEAT = window.CS3350_CHEAT || { sections: {}, map: {} }, cheatTimer = null, cheatPinned = false;
