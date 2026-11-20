@@ -7,7 +7,7 @@
   var data = window.CS3350, P = window.CS3350_PRACTICE;
   var menu = document.getElementById("practice-menu");
   var titleEl = document.getElementById("problem-title");
-  var crumbEl = document.getElementById("problem-topic");
+  var cheatPop = document.getElementById("cheat-pop");
   var body = document.getElementById("problem-body");
   var panel = document.getElementById("problem-panel");
   var toggle = document.getElementById("menu-toggle");
@@ -114,7 +114,7 @@
     var item = state.item = itemFor(key);
     var gen = state.gen = P.generate(key, item.seed);
     titleEl.textContent = state.problem.title;
-    crumbEl.innerHTML = "<a href=\"../topic/?t=" + state.topic.slug + "\">" + esc(state.topic.title) + "</a>";
+    setCheat(key);
 
     var byId = {}, placed = {};
     gen.fields.forEach(function (f) { byId[f.id] = f; });
@@ -246,6 +246,45 @@
     /* wide answer tables need the full width, so their solution goes underneath instead */
     if (!(state.gen.table && state.gen.table.head.length >= 5)) document.getElementById("problem-grid").classList.add("has-solution");
   }
+
+  /* ---------- exam cheat sheet: hover (or focus/tap) the problem title ---------- */
+  var CHEAT = window.CS3350_CHEAT || { sections: {}, map: {} }, cheatTimer = null;
+  function setCheat(key) {
+    var ids = CHEAT.map[key] || [];
+    hideCheat(true);
+    if (!ids.length) {
+      titleEl.classList.remove("has-cheat");
+      titleEl.removeAttribute("tabindex");
+      titleEl.removeAttribute("aria-describedby");
+      cheatPop.innerHTML = "";
+      return;
+    }
+    cheatPop.innerHTML = "<p class=\"cheat-label\">Exam cheat sheet</p>" + ids.map(function (id) {
+      var s = CHEAT.sections[id];
+      return "<div class=\"cheat-section\"><h4>" + esc(s.title) + "</h4>" + s.html + "</div>";
+    }).join("");
+    titleEl.classList.add("has-cheat");
+    titleEl.setAttribute("tabindex", "0");
+    titleEl.setAttribute("aria-describedby", "cheat-pop");
+  }
+  function showCheat() {
+    if (!titleEl.classList.contains("has-cheat")) return;
+    clearTimeout(cheatTimer);
+    cheatPop.hidden = false;
+  }
+  function hideCheat(now) {
+    clearTimeout(cheatTimer);
+    if (now === true) { cheatPop.hidden = true; return; }
+    cheatTimer = setTimeout(function () { cheatPop.hidden = true; }, 180);
+  }
+  titleEl.addEventListener("mouseenter", showCheat);
+  titleEl.addEventListener("mouseleave", hideCheat);
+  titleEl.addEventListener("focus", showCheat);
+  titleEl.addEventListener("blur", hideCheat);
+  titleEl.addEventListener("click", function () { if (cheatPop.hidden) showCheat(); else hideCheat(true); });
+  cheatPop.addEventListener("mouseenter", showCheat);
+  cheatPop.addEventListener("mouseleave", hideCheat);
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") hideCheat(true); });
 
   /* ---------- streak ranks: each right answer in a row pops the next rank ---------- */
   var RANKS = ["0-good", "1-nice", "2-jammin", "3-radical", "4-tight", "5-awesome", "6-extreme", "7-perfect"];

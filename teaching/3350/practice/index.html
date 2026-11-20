@@ -54,8 +54,10 @@
       <div class="practice-layout container">
           <nav class="practice-menu" id="practice-menu" aria-label="Topics and problems"></nav>
           <article class="problem-panel" id="problem-panel" aria-labelledby="problem-title">
-            <p class="breadcrumb" id="problem-topic"></p>
-            <h2 id="problem-title">Problem</h2>
+            <div class="problem-head">
+              <h2 id="problem-title">Problem</h2>
+              <div class="cheat-pop" id="cheat-pop" role="tooltip" hidden></div>
+            </div>
             <div id="problem-body"></div>
           </article>
       </div>
@@ -72,6 +74,7 @@
   <script src="../../../assets/theme.js"></script>
   <script src="../topics.js"></script>
   <script src="../generators.js"></script>
+  <script src="../cheatsheet.js"></script>
   <script src="../practice.js"></script>
   <script>
     document.getElementById("year").textContent = new Date().getFullYear();
