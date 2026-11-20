@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="CS 3350A Computer Organization (Fall 2026, Western University): practice problems and study resources from Adam Murdock Gale, Graduate Teaching Assistant.">
+  <meta name="description" content="CS 3350A Computer Organization (Fall 2026, Western University): topic summaries and practice problems from Adam Murdock Gale, Graduate Teaching Assistant.">
   <title>CS 3350A — Adam Murdock Gale</title>
   <link rel="icon" href="../../favicon.ico" sizes="any">
   <link rel="icon" type="image/png" sizes="32x32" href="../../images/favicon-32.png">
@@ -51,36 +51,30 @@
         <div class="subtitle">Fall 2026 · Department of Computer Science · University of Western Ontario</div>
         <p class="bio">
           I am a Graduate Teaching Assistant for CS 3350A, taught by Professor
-          <a href="https://www.csd.uwo.ca/~mmorenom/">Marc Moreno Maza</a>. Course information is in the
-          <a href="../../other/CS3350-Outline-Fall-2026.html">course outline</a>.
+          <a href="https://www.csd.uwo.ca/~mmorenom/">Marc Moreno Maza</a>. Pick a topic below for a
+          summary and practice problems.
         </p>
-      </div>
-    </section>
-
-    <section id="practice-exam">
-      <div class="container">
-        <h2>Practice problems</h2>
-        <article class="publication">
-          <div class="year">PDF</div>
-          <div>
-            <h3><a href="3350-practice-problems.pdf">CS 3350 practice problems</a></h3>
-            <p>Exam-style problems from a previous offering of the course, with answers removed.
-              Topics: CPI, data locality, set-associative caches, flip-flops, finite state machines,
-              datapath and control signals, pipelining, MIPS assembly, data dependencies,
-              register renaming, and the MESI protocol.</p>
-            <p class="links"><a href="3350-practice-problems.pdf">Download (PDF)</a></p>
-          </div>
-        </article>
-      </div>
-    </section>
-
-    <section id="generator">
-      <div class="container">
-        <h2>Problem generator</h2>
-        <div class="placeholder-box">
-          <p><strong>Coming soon.</strong> Randomly generated exam-style problems to practise with.</p>
-          <button class="button" type="button" disabled>Generate a problem</button>
+        <div class="actions">
+          <a class="button primary" href="practice/">Practice problems</a>
         </div>
+      </div>
+    </section>
+
+    <section id="topics">
+      <div class="container">
+        <h2>Topics</h2>
+        <ol class="topic-menu" id="topic-menu"></ol>
+        <noscript><p>The topic list needs JavaScript. The <a href="../../other/CS3350-Outline-Fall-2026.html">course outline</a> lists the topics.</p></noscript>
+      </div>
+    </section>
+
+    <section id="resources">
+      <div class="container">
+        <h2>Resources</h2>
+        <ul class="resource-list">
+          <li><a href="../../other/CS3350-Outline-Fall-2026.html">Course outline</a> <span class="meta">· Fall 2026</span></li>
+          <li><a href="3350-practice-problems.pdf">Practice exam (PDF)</a> <span class="meta">· from a previous offering, answers removed</span></li>
+        </ul>
       </div>
     </section>
   </main>
@@ -93,8 +87,37 @@
   </footer>
 
   <script src="../../assets/theme.js"></script>
+  <script src="topics.js"></script>
   <script>
     document.getElementById("year").textContent = new Date().getFullYear();
+
+    (function () {
+      var menu = document.getElementById("topic-menu");
+      CS3350.topics.forEach(function (t, i) {
+        var li = document.createElement("li");
+        li.className = "topic-item";
+        var num = document.createElement("span");
+        num.className = "topic-num";
+        num.textContent = String(i + 1).padStart(2, "0");
+        var body = document.createElement("div");
+        var h3 = document.createElement("h3");
+        var a = document.createElement("a");
+        a.href = "topic/?t=" + t.slug;
+        a.textContent = t.title;
+        h3.appendChild(a);
+        var p = document.createElement("p");
+        p.textContent = t.blurb;
+        var meta = document.createElement("span");
+        meta.className = "topic-lectures";
+        meta.textContent = t.lectures;
+        body.appendChild(h3);
+        body.appendChild(p);
+        li.appendChild(num);
+        li.appendChild(body);
+        li.appendChild(meta);
+        menu.appendChild(li);
+      });
+    })();
   </script>
 </body>
 </html>

@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="CS 3350A Computer Organization: topic summary and practice problems.">
+  <title>CS 3350A topic — Adam Murdock Gale</title>
+  <link rel="icon" href="../../../favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon-32.png">
+  <link rel="apple-touch-icon" href="../../../images/apple-touch-icon.png">
+  <script>
+    /* Pick the theme before first paint: saved choice, else the OS preference. */
+    (function () {
+      var t = null;
+      try { t = localStorage.getItem("theme"); } catch (e) {}
+      if (t !== "light" && t !== "dark") {
+        t = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+      }
+      document.documentElement.setAttribute("data-theme", t);
+    })();
+  </script>
+  <link rel="stylesheet" href="../../../assets/site.css">
+</head>
+<body>
+  <header>
+    <nav class="container" aria-label="Primary navigation">
+      <a class="brand" href="../../../">Adam Murdock Gale</a>
+      <div class="nav-right">
+        <button class="theme-toggle" type="button" aria-label="Switch to dark mode" title="Switch to dark mode">
+          <img class="chao chao-dark" src="../../../images/dark-chao.png" alt="" width="37" height="40">
+          <img class="chao chao-hero" src="../../../images/hero-chao.png" alt="" width="23" height="40">
+        </button>
+        <div class="nav-links">
+        <a href="../../../#about">About</a>
+        <a href="../../../#education">Education</a>
+        <a href="../../../#publications">Publications</a>
+        <a href="../../../#projects">Research</a>
+        <a href="../../../#teaching">Teaching</a>
+        <a href="../../../#irl">irl</a>
+        <a href="../../../#contact">Contact</a>
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <section id="topic">
+      <div class="container">
+        <p class="breadcrumb"><a href="../../../#teaching">Teaching</a> / <a href="../">CS 3350A</a> / <span id="crumb">Topic</span></p>
+        <h1 class="page-title" id="topic-title">Topic</h1>
+        <div class="subtitle" id="topic-lectures"></div>
+        <p class="bio" id="topic-summary"></p>
+        <noscript><p>This page needs JavaScript. <a href="../">Back to CS 3350A</a>.</p></noscript>
+      </div>
+    </section>
+
+    <section id="key-ideas">
+      <div class="container">
+        <h2>Key ideas</h2>
+        <ul class="key-ideas" id="topic-ideas"></ul>
+      </div>
+    </section>
+
+    <section id="practice">
+      <div class="container">
+        <h2>Practice problems</h2>
+        <ul class="problem-links" id="topic-problems"></ul>
+        <nav class="topic-pager" aria-label="Other topics">
+          <a id="prev-topic" href="../">← All topics</a>
+          <a id="next-topic" href="../">All topics →</a>
+        </nav>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <span>© <span id="year">2026</span> Adam Murdock Gale</span>
+      <span><a href="mailto:agale9+website@uwo.ca">agale9@uwo.ca</a></span>
+    </div>
+  </footer>
+
+  <script src="../../../assets/theme.js"></script>
+  <script src="../topics.js"></script>
+  <script>
+    document.getElementById("year").textContent = new Date().getFullYear();
+
+    (function () {
+      var slug = new URLSearchParams(location.search).get("t");
+      var found = CS3350.find(slug) || { topic: CS3350.topics[0], index: 0 };
+      var t = found.topic, i = found.index, n = CS3350.topics.length;
+
+      document.title = t.title + " — CS 3350A — Adam Murdock Gale";
+      document.getElementById("crumb").textContent = t.title;
+      document.getElementById("topic-title").textContent = (i + 1) + ". " + t.title;
+      document.getElementById("topic-lectures").textContent = (t.lectures.indexOf("–") === -1 ? "Lecture " : "Lectures ") + t.lectures;
+      document.getElementById("topic-summary").textContent = t.summary;
+
+      var ideas = document.getElementById("topic-ideas");
+      t.keyIdeas.forEach(function (k) {
+        var li = document.createElement("li");
+        li.textContent = k;
+        ideas.appendChild(li);
+      });
+
+      var list = document.getElementById("topic-problems");
+      t.problems.forEach(function (p) {
+        var li = document.createElement("li");
+        var a = document.createElement("a");
+        a.href = "../practice/?t=" + t.slug + "&p=" + p.id;
+        a.textContent = p.title;
+        var tag = document.createElement("span");
+        tag.className = p.ready ? "status ready" : "status soon";
+        tag.textContent = p.ready ? "Available" : "Coming soon";
+        li.appendChild(a);
+        li.appendChild(tag);
+        list.appendChild(li);
+      });
+
+      var prev = document.getElementById("prev-topic");
+      var next = document.getElementById("next-topic");
+      if (i > 0) {
+        prev.href = "?t=" + CS3350.topics[i - 1].slug;
+        prev.textContent = "← " + CS3350.topics[i - 1].title;
+      }
+      if (i < n - 1) {
+        next.href = "?t=" + CS3350.topics[i + 1].slug;
+        next.textContent = CS3350.topics[i + 1].title + " →";
+      }
+    })();
+  </script>
+</body>
+</html>
