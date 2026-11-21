@@ -47,25 +47,30 @@
   var state = { topic: null, problem: null, gen: null, item: null };
 
   /* ---------- menu ---------- */
+  /* Brightspace categories, each with its lecture subtopics; only the open subtopic lists its problems */
   function renderMenu() {
     var html = "<ol>";
-    data.topics.forEach(function (t, i) {
-      var active = t === state.topic;
-      var target = store.last[t.slug] || t.problems[0].id;
-      html += "<li class=\"menu-topic-item" + (active ? " is-open" : "") + "\">" +
-        "<a class=\"menu-topic\" href=\"?t=" + t.slug + "&amp;p=" + target + "\" data-t=\"" + t.slug + "\" data-p=\"" + target + "\"" +
-        (active ? " aria-expanded=\"true\"" : " aria-expanded=\"false\"") + ">" +
-        esc(t.title) + "</a>";
-      if (active) {
-        html += "<ul>";
-        t.problems.forEach(function (p) {
-          var cur = p === state.problem;
-          html += "<li><a class=\"menu-problem\" href=\"?t=" + t.slug + "&amp;p=" + p.id + "\" data-t=\"" + t.slug + "\" data-p=\"" + p.id + "\"" +
-            (cur ? " aria-current=\"true\"" : "") + ">" + esc(p.title) + "</a></li>";
-        });
-        html += "</ul>";
-      }
-      html += "</li>";
+    data.categories.forEach(function (cat, ci) {
+      html += "<li class=\"menu-cat\"><span class=\"menu-cat-title\">" + esc(cat.title) + "</span><ol>";
+      data.topics.forEach(function (t) {
+        if (t.category !== ci) return;
+        var active = t === state.topic;
+        var target = store.last[t.slug] || t.problems[0].id;
+        html += "<li class=\"menu-topic-item" + (active ? " is-open" : "") + "\">" +
+          "<a class=\"menu-topic\" href=\"?t=" + t.slug + "&amp;p=" + target + "\" data-t=\"" + t.slug + "\" data-p=\"" + target + "\"" +
+          (active ? " aria-expanded=\"true\"" : " aria-expanded=\"false\"") + "><span>" + esc(t.title) + "</span><span class=\"menu-lec\">" + esc(t.lectures) + "</span></a>";
+        if (active) {
+          html += "<ul>";
+          t.problems.forEach(function (p) {
+            var cur = p === state.problem;
+            html += "<li><a class=\"menu-problem\" href=\"?t=" + t.slug + "&amp;p=" + p.id + "\" data-t=\"" + t.slug + "\" data-p=\"" + p.id + "\"" +
+              (cur ? " aria-current=\"true\"" : "") + ">" + esc(p.title) + "</a></li>";
+          });
+          html += "</ul>";
+        }
+        html += "</li>";
+      });
+      html += "</ol></li>";
     });
     menu.innerHTML = html + "</ol>";
   }

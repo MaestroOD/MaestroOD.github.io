@@ -415,7 +415,10 @@ h2 + h3.group { margin-top: 0; }
   padding: 16px 0;
   border-top: 1px solid var(--line);
 }
-.topic-item h3 { margin: 0 0 2px; font-size: 1.15rem; }
+.topic-cat { margin: 28px 0 6px; font-size: 1.25rem; }
+.topic-cat:first-of-type { margin-top: 0; }
+.topic-cat .topic-lectures { margin-left: 6px; font-weight: 400; font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.topic-item h3, .topic-item h4 { margin: 0 0 2px; font-size: 1.1rem; }
 .topic-item p { margin: 0; color: var(--muted); font-size: 0.95rem; }
 .topic-lectures { color: var(--muted); font-size: 0.85rem; white-space: nowrap; }
 
@@ -486,10 +489,15 @@ body.app .brand { font-size: 1.1rem; }
 .practice-menu a { display: block; color: var(--body-text); text-decoration: none; padding: 2px 6px; border-radius: 3px; }
 .practice-menu a:hover { color: var(--ink); text-decoration: underline; text-decoration-color: var(--link-hover); }
 .practice-menu a:focus-visible { outline: 2px solid var(--sky); outline-offset: 1px; }
+.menu-cat + .menu-cat { margin-top: 6px; }
+.menu-cat-title { display: block; padding: 2px 6px; color: var(--muted); font-size: 0.82em; letter-spacing: 0.02em; }
+.menu-cat > ol { padding-left: 1.5ch; }
+.practice-menu .menu-topic { display: flex; justify-content: space-between; gap: 8px; }
+.menu-lec { color: var(--muted); font-weight: 400; font-size: 0.85em; }
 .menu-topic-item.is-open > .menu-topic { color: var(--ink); font-weight: 700; }
 .menu-topic-item ul { margin: 1px 0 6px; }
 .menu-topic-item li { display: flex; }
-.menu-topic-item li::before { content: "├─"; flex: none; padding: 2px 0 0 3.2ch; color: var(--muted); }
+.menu-topic-item li::before { content: "├─"; flex: none; padding: 2px 0 0 1.6ch; color: var(--muted); }
 .menu-topic-item li:last-child::before { content: "└─"; }
 .menu-problem { flex: 1; }
 .menu-problem[aria-current] { background: var(--brand); color: var(--white); }

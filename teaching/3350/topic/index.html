@@ -93,7 +93,7 @@
       document.title = t.title + " — CS 3350A — Adam Murdock Gale";
       document.getElementById("crumb").textContent = t.title;
       document.getElementById("topic-title").textContent = t.title;
-      document.getElementById("topic-lectures").textContent = (t.lectures.indexOf("–") === -1 ? "lecture " : "lectures ") + t.lectures;
+      document.getElementById("topic-lectures").textContent = (t.lectures.indexOf("–") === -1 ? "lecture " : "lectures ") + t.lectures + " · " + CS3350.categories[t.category].title;
       document.getElementById("topic-summary").textContent = t.summary;
 
       var ideas = document.getElementById("topic-ideas");
