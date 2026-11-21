@@ -58,7 +58,7 @@
         var target = store.last[t.slug] || t.problems[0].id;
         html += "<li class=\"menu-topic-item" + (active ? " is-open" : "") + "\">" +
           "<a class=\"menu-topic\" href=\"?t=" + t.slug + "&amp;p=" + target + "\" data-t=\"" + t.slug + "\" data-p=\"" + target + "\"" +
-          (active ? " aria-expanded=\"true\"" : " aria-expanded=\"false\"") + "><span>" + esc(t.title) + "</span><span class=\"menu-lec\">" + esc(t.lectures) + "</span></a>";
+          (active ? " aria-expanded=\"true\"" : " aria-expanded=\"false\"") + ">" + esc(t.title) + "</a>";
         if (active) {
           html += "<ul>";
           t.problems.forEach(function (p) {
@@ -184,6 +184,7 @@
       "</div></form><div class=\"feedback\" id=\"feedback\" role=\"status\" aria-live=\"polite\"></div></div>" +
       "<aside class=\"solution\" id=\"solution\" hidden></aside></div>";
     body.innerHTML = html;
+    markUnits(body.querySelector(".problem-work"));
 
     // restore typed answers
     body.querySelectorAll("[data-f]").forEach(function (el) {
@@ -207,7 +208,7 @@
       renderProblem(true);
     });
     document.getElementById("show-solution").addEventListener("click", function () {
-      item.shown = true; save(); reveal();
+      item.shown = true; item.scored = true; save(); reveal();
       document.getElementById("solution").scrollIntoView({ block: "nearest", behavior: "smooth" });
     });
     if (focus) {
@@ -250,11 +251,14 @@
     state.item.checked = true;
     save();
     if (right === n) {
+      /* first answer on this problem is right: +5 rings and the next rank */
       if (!quiet && !state.item.scored) {
         state.item.scored = true;
         store.streak = (store.streak || 0) + 1;
+        store.rings = (store.rings || 0) + RING_GAIN;
         save();
         popRank(store.streak);
+        collectRings(RING_GAIN);
       }
       fb.className = "feedback is-right";
       fb.innerHTML = "<strong>correct!</strong>";
@@ -263,9 +267,17 @@
       if (!quiet) fb.scrollIntoView({ block: "nearest", behavior: "smooth" });
       return;
     }
-    /* a wrong answer knocks the rank back one place (e.g. Jammin'! → Nice!) */
-    if (!quiet && !blank && !state.item.scored) { store.streak = Math.max(0, (store.streak || 0) - 1); save(); }
-    if (!quiet && right + blank < n) spillRings();
+    /* first answer on this problem has a wrong value in it: the streak resets and half the rings
+       (rounded up) spill out. Blank boxes alone don't count as a miss. */
+    if (!quiet && right + blank < n && !state.item.scored) {
+      state.item.scored = true;
+      var lost = Math.ceil((store.rings || 0) / 2);
+      store.streak = 0;
+      store.rings = (store.rings || 0) - lost;
+      save();
+      spillRings(lost);
+      loseRings();
+    }
     fb.className = "feedback is-wrong";
     var msg = "<strong>not quite.</strong> " + (n > 1 ? right + " of " + n + " correct." : "") +
       (blank ? " fill in every answer." : "");
@@ -278,14 +290,17 @@
   function reveal() {
     var sol = document.getElementById("solution");
     sol.innerHTML = "<h4>solution</h4>" + state.gen.solution;
+    markUnits(sol);
     sol.hidden = false;
     fitLayout();
   }
 
   /* ---------- fit the problem to the screen ----------
-     Try a few arrangements, best first, and keep the first one where nothing needs scrolling and
-     nothing is squeezed sideways. "side": solution beside the work. "split": prompt on the left,
-     answer boxes on the right. Re-run after rendering, checking, revealing and resizing. */
+     Answer boxes go under the question. Only when the bare problem (no feedback, no solution) would
+     need scrolling do they move beside the question ("split"), and that choice is made once, so the
+     boxes never jump when the feedback or solution appears. The solution then goes beside the work
+     ("has-solution") only when it does not fit below. Re-run after rendering, checking, revealing and
+     resizing. */
   function overflowOf() {
     var grid = document.getElementById("problem-grid"), sideways = 0;
     grid.querySelectorAll(".problem-table, .problem-code, .table-wrap, .answer-grid, svg").forEach(function (e) {
@@ -296,32 +311,88 @@
     var workHidden = Math.max(0, work.getBoundingClientRect().bottom - (pr.bottom - 12));
     return { down: panel.scrollHeight - panel.clientHeight, sideways: sideways, workHidden: workHidden };
   }
+  function badness(o) { return Math.max(0, o.down) + o.workHidden * 50 + (o.sideways > 2 ? 1e7 : 0); }
   function fitLayout() {
     var grid = document.getElementById("problem-grid");
     if (!grid) return;
-    var work = grid.querySelector(".problem-work"), sol = document.getElementById("solution");
+    var work = grid.querySelector(".problem-work"), sol = document.getElementById("solution"), fb = document.getElementById("feedback");
     var canSplit = !!work.querySelector(".table-wrap, .code-blanks, .answer-grid") && !!work.querySelector(".problem-prompt :is(table, pre, svg)");
-    var shown = !sol.hidden, phone = window.innerWidth <= 640;
-    var options = [];
-    if (shown && !phone) { options.push(["has-solution"]); if (canSplit) options.push(["has-solution", "split"]); }
-    if (canSplit && !phone) options.push(["split"]);
-    options.push([]);
-    var best = null, keepTop = panel.scrollTop;
+    var phone = window.innerWidth <= 640, keepTop = panel.scrollTop;
     panel.scrollTop = 0;
-    for (var i = 0; i < options.length; i++) {
-      grid.classList.remove("has-solution", "split");
-      options[i].forEach(function (c) { grid.classList.add(c); });
-      /* work that is cut off counts far more than a solution that needs scrolling */
-      var o = overflowOf(), bad = Math.max(0, o.down) + o.workHidden * 50 + (o.sideways > 2 ? 1e7 : 0);
-      if (!best || bad < best.bad) best = { bad: bad, opt: options[i] };
-      if (bad === 0) break;
-    }
     grid.classList.remove("has-solution", "split");
-    best.opt.forEach(function (c) { grid.classList.add(c); });
+
+    /* 1. split or not, judged on the bare problem */
+    var split = false;
+    if (canSplit && !phone) {
+      var solHidden = sol.hidden, fbDisplay = fb.style.display;
+      sol.hidden = true; fb.style.display = "none";
+      var stacked = overflowOf();
+      if (stacked.down > 0 || stacked.workHidden > 0) {
+        grid.classList.add("split");
+        split = badness(overflowOf()) < badness(stacked);
+        grid.classList.remove("split");
+      }
+      sol.hidden = solHidden; fb.style.display = fbDisplay;
+    }
+    if (split) grid.classList.add("split");
+
+    /* 2. the solution beside the work, or under it */
+    if (!sol.hidden && !phone) {
+      var below = badness(overflowOf());
+      if (below > 0) {
+        grid.classList.add("has-solution");
+        if (badness(overflowOf()) >= below) grid.classList.remove("has-solution");
+      }
+    }
     panel.scrollTop = keepTop;
   }
   var fitTimer = null;
   window.addEventListener("resize", function () { clearTimeout(fitTimer); fitTimer = setTimeout(fitLayout, 120); });
+
+  /* ---------- units: hover (or tap) GHz, ns, ps, … to see what they stand for ---------- */
+  var UNITS = {
+    GHz: "gigahertz, 10⁹ cycles per second", MHz: "megahertz, 10⁶ cycles per second", kHz: "kilohertz, 10³ cycles per second",
+    ms: "millisecond, 10⁻³ s", "μs": "microsecond, 10⁻⁶ s", "µs": "microsecond, 10⁻⁶ s", ns: "nanosecond, 10⁻⁹ s", ps: "picosecond, 10⁻¹² s"
+  };
+  var UNIT_NOTE = "know these units for the exam. the cheat sheet may not list them.";
+  var UNIT_RE = /(^|[^A-Za-z0-9_$])(GHz|MHz|kHz|ms|μs|µs|ns|ps)(?![A-Za-z0-9_])/g;
+  var unitTip = document.createElement("div");
+  unitTip.className = "unit-tip";
+  unitTip.setAttribute("role", "tooltip");
+  unitTip.hidden = true;
+  document.body.appendChild(unitTip);
+  function markUnits(el) {
+    if (!el) return;
+    var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
+      acceptNode: function (n) {
+        return n.parentElement.closest("pre, code, select, option, .unit, .problem-code") ? NodeFilter.FILTER_REJECT :
+          (UNIT_RE.lastIndex = 0, UNIT_RE.test(n.nodeValue)) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
+      }
+    });
+    var nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.forEach(function (n) {
+      var span = document.createElement("span");
+      span.innerHTML = esc(n.nodeValue).replace(UNIT_RE, function (m, pre, u) {
+        return pre + "<span class=\"unit\" tabindex=\"0\" data-unit=\"" + u + "\">" + u + "</span>";
+      });
+      while (span.firstChild) n.parentNode.insertBefore(span.firstChild, n);
+      n.parentNode.removeChild(n);
+    });
+  }
+  function showUnit(u) {
+    unitTip.innerHTML = "<strong>" + esc(u.getAttribute("data-unit")) + "</strong> = " + esc(UNITS[u.getAttribute("data-unit")]) + "<span>" + UNIT_NOTE + "</span>";
+    unitTip.hidden = false;
+    var r = u.getBoundingClientRect(), w = unitTip.offsetWidth, h = unitTip.offsetHeight;
+    unitTip.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + "px";
+    unitTip.style.top = (r.top - h - 8 < 8 ? r.bottom + 8 : r.top - h - 8) + "px";
+  }
+  function hideUnit() { unitTip.hidden = true; }
+  body.addEventListener("mouseover", function (e) { var u = e.target.closest(".unit"); if (u) showUnit(u); });
+  body.addEventListener("mouseout", function (e) { if (e.target.closest(".unit")) hideUnit(); });
+  body.addEventListener("focusin", function (e) { var u = e.target.closest(".unit"); if (u) showUnit(u); });
+  body.addEventListener("focusout", function (e) { if (e.target.closest(".unit")) hideUnit(); });
+  panel.addEventListener("scroll", hideUnit);
 
   /* ---------- exam cheat sheet: the [Cheat Sheet] button beside the title ---------- */
   var CHEAT = window.CS3350_CHEAT || { sections: {}, map: {} }, cheatTimer = null, cheatPinned = false;
@@ -360,13 +431,14 @@
     if (cheatPinned && !cheatPop.contains(e.target) && e.target !== cheatBtn) hideCheat(true);
   });
 
-  /* ---------- wrong answer: a burst of gold rings scatters, bounces and blinks out ---------- */
-  function spillRings() {
-    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  /* ---------- wrong answer: a burst of gold rings scatters, bounces, and blinks out ---------- */
+  function reducedMotion() { return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches; }
+  function spillRings(count) {
+    if (!count || reducedMotion()) return;
     var x0, y0;
     if (lastPointer && Date.now() - lastPointer.t < 1500) { x0 = lastPointer.x; y0 = lastPointer.y; }
     else { var r = document.querySelector("#answer-form button[type=submit]").getBoundingClientRect(); x0 = r.left + r.width / 2; y0 = r.top + r.height / 2; }
-    var layer = document.createElement("div"), rings = [], n = 16, floor = Math.min(window.innerHeight - 16, y0 + 150);
+    var layer = document.createElement("div"), rings = [], n = Math.min(count, 32), floor = Math.min(window.innerHeight - 16, y0 + 150);
     layer.className = "ring-layer";
     document.body.appendChild(layer);
     for (var i = 0; i < n; i++) {
@@ -393,6 +465,52 @@
       if (age < life) requestAnimationFrame(frame); else layer.remove();
     }
     requestAnimationFrame(frame);
+  }
+
+  /* ---------- ring counter (top right): +5 for a right answer, a miss loses half (rounded up) ---------- */
+  var RING_GAIN = 5;
+  var ringBox = document.getElementById("ring-count"), ringNum = document.getElementById("ring-num");
+  var shownRings = store.rings || 0;
+  function showRings(n) { shownRings = n; ringNum.textContent = n; }
+  showRings(shownRings);
+  function bump(cls) {
+    ringBox.classList.remove("is-gain", "is-loss");
+    void ringBox.offsetWidth;   /* restart the animation */
+    ringBox.classList.add(cls);
+  }
+  function loseRings() { showRings(store.rings || 0); bump("is-loss"); }
+  /* little rings fly from the button to the counter, which ticks up as each one lands */
+  function collectRings(k) {
+    var target = store.rings || 0;
+    if (reducedMotion()) { showRings(target); bump("is-gain"); return; }
+    var from = lastPointer && Date.now() - lastPointer.t < 1500 ? lastPointer :
+      (function () { var r = document.querySelector("#answer-form button[type=submit]").getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top }; })();
+    var to = ringBox.querySelector(".ring-icon").getBoundingClientRect(), tx = to.left + to.width / 2, ty = to.top + to.height / 2;
+    var layer = document.createElement("div");
+    layer.className = "ring-layer";
+    document.body.appendChild(layer);
+    var landed = 0;
+    for (var i = 0; i < k; i++) (function (i) {
+      var el = document.createElement("span"), spin = document.createElement("span");
+      el.className = "ring is-small"; spin.className = "ring-spin";
+      el.appendChild(spin); layer.appendChild(el);
+      var sx = from.x + (i - (k - 1) / 2) * 18, sy = from.y - 6, start = null, dur = 620, delay = i * 70;
+      var cx = (sx + tx) / 2 + (Math.random() - 0.5) * 120, cy = Math.min(sy, ty) - 80 - Math.random() * 60;
+      el.style.transform = "translate(" + (sx - 8) + "px," + (sy - 8) + "px)";
+      function frame(ts) {
+        if (start === null) start = ts + delay;
+        var u = Math.max(0, Math.min(1, (ts - start) / dur)), e = u * u * (3 - 2 * u);
+        var x = (1 - e) * (1 - e) * sx + 2 * (1 - e) * e * cx + e * e * tx, y = (1 - e) * (1 - e) * sy + 2 * (1 - e) * e * cy + e * e * ty;
+        el.style.transform = "translate(" + (x - 8) + "px," + (y - 8) + "px)";
+        if (u < 1) { requestAnimationFrame(frame); return; }
+        el.remove();
+        landed++;
+        showRings(Math.min(target, shownRings + 1));
+        bump("is-gain");
+        if (landed === k) { showRings(target); layer.remove(); }
+      }
+      requestAnimationFrame(frame);
+    })(i);
   }
 
   /* ---------- streak ranks: each right answer in a row pops the next rank ---------- */

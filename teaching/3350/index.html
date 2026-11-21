@@ -55,26 +55,9 @@
         </p>
         <p class="course-links">
           <a href="../../other/CS3350-Outline-Fall-2026.html">outline</a> ·
-          <a href="#topics">topic overview</a> ·
+          <a href="topics/">topics</a> ·
           <a href="practice/">practice</a>
         </p>
-      </div>
-    </section>
-
-    <section id="topics">
-      <div class="container">
-        <h2>topics</h2>
-        <div id="topic-menu"></div>
-        <noscript><p>the topic list needs javascript. the <a href="../../other/CS3350-Outline-Fall-2026.html">outline</a> lists the topics.</p></noscript>
-      </div>
-    </section>
-
-    <section id="resources">
-      <div class="container">
-        <h2>resources</h2>
-        <ul class="resource-list">
-          <li><a href="3350-practice-problems.pdf">practice exam (pdf)</a> <span class="meta">· from a previous offering, answers removed</span></li>
-        </ul>
       </div>
     </section>
   </main>
@@ -87,47 +70,8 @@
   </footer>
 
   <script src="../../assets/theme.js"></script>
-  <script src="topics.js"></script>
   <script>
     document.getElementById("year").textContent = new Date().getFullYear();
-
-    (function () {
-      var root = document.getElementById("topic-menu");
-      CS3350.categories.forEach(function (cat, ci) {
-        var h3 = document.createElement("h3");
-        h3.className = "topic-cat";
-        h3.textContent = cat.title + " ";
-        var lec = document.createElement("span");
-        lec.className = "topic-lectures";
-        lec.textContent = cat.lectures;
-        h3.appendChild(lec);
-        root.appendChild(h3);
-        var menu = document.createElement("ol");
-        menu.className = "topic-menu";
-        CS3350.topics.forEach(function (t) {
-          if (t.category !== ci) return;
-          var li = document.createElement("li");
-          li.className = "topic-item";
-          var body = document.createElement("div");
-          var h4 = document.createElement("h4");
-          var a = document.createElement("a");
-          a.href = "topic/?t=" + t.slug;
-          a.textContent = t.title;
-          h4.appendChild(a);
-          var p = document.createElement("p");
-          p.textContent = t.blurb;
-          var meta = document.createElement("span");
-          meta.className = "topic-lectures";
-          meta.textContent = t.lectures;
-          body.appendChild(h4);
-          body.appendChild(p);
-          li.appendChild(body);
-          li.appendChild(meta);
-          menu.appendChild(li);
-        });
-        root.appendChild(menu);
-      });
-    })();
   </script>
 </body>
 </html>

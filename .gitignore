@@ -1,10 +1,9 @@
 # Course material in teaching/ is private by default: past quizzes, midterms and
 # answer keys are kept here only to build problem sets locally. This repo is
 # public (GitHub Pages), so anything committed is visible to everyone.
-# Only the pages and the answer-free practice sets below are published.
+# Only the pages below are published: no course files (PDFs or otherwise) at all.
 teaching/**
 !teaching/**/
 !teaching/**/index.html
 !teaching/**/*.css
 !teaching/**/*.js
-!teaching/**/*-practice-problems.pdf

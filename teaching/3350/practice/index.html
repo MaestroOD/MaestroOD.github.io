@@ -47,6 +47,11 @@
     <section id="practice" class="practice-app">
       <div class="practice-bar container">
         <p class="breadcrumb"><a href="../../../#teaching">Teaching</a> / <a href="../">CS 3350A</a> / <strong>Practice</strong></p>
+        <div class="ring-count" id="ring-count" title="rings: +5 for a right answer, a miss loses half">
+          <span class="ring-icon" aria-hidden="true"><span class="ring-spin"></span></span>
+          <span class="ring-label">RINGS</span>
+          <span class="ring-num" id="ring-num" aria-live="polite">0</span>
+        </div>
         <button class="menu-toggle" id="menu-toggle" type="button" aria-controls="practice-menu" aria-expanded="false">☰ <span id="menu-toggle-label">topics</span></button>
       </div>
       <noscript><p class="container">the practice problems need javascript.</p></noscript>

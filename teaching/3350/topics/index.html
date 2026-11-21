@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="CS 3350A Computer Organization: topics, grouped as on Brightspace.">
+  <title>Topics — CS 3350A — Adam Murdock Gale</title>
+  <link rel="icon" href="../../../favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="../../../images/favicon-32.png">
+  <link rel="apple-touch-icon" href="../../../images/apple-touch-icon.png">
+  <script>
+    /* Pick the theme before first paint: saved choice, else the OS preference. */
+    (function () {
+      var t = null;
+      try { t = localStorage.getItem("theme"); } catch (e) {}
+      if (t !== "light" && t !== "dark") {
+        t = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+      }
+      document.documentElement.setAttribute("data-theme", t);
+    })();
+  </script>
+  <link rel="stylesheet" href="../../../assets/site.css">
+</head>
+<body>
+  <header>
+    <nav class="container" aria-label="Primary navigation">
+      <a class="brand" href="../../../">Adam Murdock Gale</a>
+      <div class="nav-right">
+        <button class="theme-toggle" type="button" aria-label="Switch to dark mode" title="Switch to dark mode">
+          <img class="chao chao-dark" src="../../../images/dark-chao.png" alt="" width="37" height="40">
+          <img class="chao chao-hero" src="../../../images/hero-chao.png" alt="" width="23" height="40">
+        </button>
+        <div class="nav-links">
+        <a href="../../../#about">About</a>
+        <a href="../../../#education">Education</a>
+        <a href="../../../#publications">Publications</a>
+        <a href="../../../#projects">Research</a>
+        <a href="../../../#teaching">Teaching</a>
+        <a href="../../../#irl">irl</a>
+        <a href="../../../#contact">Contact</a>
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <section id="topics">
+      <div class="container">
+        <p class="breadcrumb"><a href="../../../#teaching">Teaching</a> / <a href="../">CS 3350A</a> / <strong>Topics</strong></p>
+        <h1 class="page-title">topics</h1>
+        <div id="topic-menu"></div>
+        <noscript><p>the topic list needs javascript. the <a href="../../../other/CS3350-Outline-Fall-2026.html">outline</a> lists the topics.</p></noscript>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <span>© <span id="year">2026</span> Adam Murdock Gale</span>
+      <span><a href="mailto:agale9+website@uwo.ca">agale9@uwo.ca</a></span>
+    </div>
+  </footer>
+
+  <script src="../../../assets/theme.js"></script>
+  <script src="../topics.js"></script>
+  <script>
+    document.getElementById("year").textContent = new Date().getFullYear();
+
+    (function () {
+      var root = document.getElementById("topic-menu");
+      CS3350.categories.forEach(function (cat, ci) {
+        var h2 = document.createElement("h2");
+        h2.className = "topic-cat";
+        h2.id = cat.slug;
+        h2.textContent = cat.title;
+        root.appendChild(h2);
+        var menu = document.createElement("ol");
+        menu.className = "topic-menu";
+        CS3350.topics.forEach(function (t) {
+          if (t.category !== ci) return;
+          var li = document.createElement("li");
+          li.className = "topic-item";
+          var h3 = document.createElement("h3");
+          var a = document.createElement("a");
+          a.href = "../topic/?t=" + t.slug;
+          a.textContent = t.title;
+          h3.appendChild(a);
+          var p = document.createElement("p");
+          p.textContent = t.blurb;
+          li.appendChild(h3);
+          li.appendChild(p);
+          menu.appendChild(li);
+        });
+        root.appendChild(menu);
+      });
+    })();
+  </script>
+</body>
+</html>

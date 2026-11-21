@@ -46,11 +46,10 @@
   <main>
     <section id="topic">
       <div class="container">
-        <p class="breadcrumb"><a href="../../../#teaching">Teaching</a> / <a href="../">CS 3350A</a> / <span id="crumb">Topic</span></p>
+        <p class="breadcrumb"><a href="../../../#teaching">Teaching</a> / <a href="../">CS 3350A</a> / <a id="crumb-cat" href="../topics/">Topics</a> / <strong id="crumb">Topic</strong></p>
         <h1 class="page-title" id="topic-title">Topic</h1>
-        <div class="subtitle" id="topic-lectures"></div>
         <p class="bio" id="topic-summary"></p>
-        <noscript><p>this page needs javascript. <a href="../">back to CS 3350A</a>.</p></noscript>
+        <noscript><p>this page needs javascript. <a href="../topics/">back to the topics</a>.</p></noscript>
       </div>
     </section>
 
@@ -66,8 +65,8 @@
         <h2>practice problems</h2>
         <ul class="problem-links" id="topic-problems"></ul>
         <nav class="topic-pager" aria-label="Other topics">
-          <a id="prev-topic" href="../">← all topics</a>
-          <a id="next-topic" href="../">all topics →</a>
+          <a id="prev-topic" href="../topics/">← all topics</a>
+          <a id="next-topic" href="../topics/">all topics →</a>
         </nav>
       </div>
     </section>
@@ -93,7 +92,9 @@
       document.title = t.title + " — CS 3350A — Adam Murdock Gale";
       document.getElementById("crumb").textContent = t.title;
       document.getElementById("topic-title").textContent = t.title;
-      document.getElementById("topic-lectures").textContent = (t.lectures.indexOf("–") === -1 ? "lecture " : "lectures ") + t.lectures + " · " + CS3350.categories[t.category].title;
+      var cat = CS3350.categories[t.category], crumbCat = document.getElementById("crumb-cat");
+      crumbCat.textContent = cat.title;
+      crumbCat.href = "../topics/#" + cat.slug;
       document.getElementById("topic-summary").textContent = t.summary;
 
       var ideas = document.getElementById("topic-ideas");

@@ -526,14 +526,14 @@
         eff2 = sum(m.freq.map(function (f, i) { return f / 100 * newCpi[i]; }));
         pct = (m.eff / eff2 - 1) * 100;
         return true;
-      }, function (ok) { return ok && exact(eff2, 2) && pct > 0 && exact(pct, 1); });
+      }, function (ok) { return ok && exact(eff2, 2) && pct > 0 && exact(pct / 5, 0); });
       return {
         prompt: p("A program has the instruction mix below. Suppose " + desc + ". The instruction count and clock cycle do not change.") +
-          table(["Op", "Freq", "CPI<sub>i</sub>"], mixRows(m)) + p("What is the new effective CPI, and how much faster does the program run?"),
-        fields: [num("cpi", "New effective CPI", round(eff2, 2)), num("pct", "Faster by", round(pct, 1), { suffix: "%" })],
+          table(["Class", "Frequency", "CPI"], mixRows(m)) + p("What is the new effective CPI, and how much faster does the program run?"),
+        fields: [num("cpi", "New effective CPI", round(eff2, 2)), num("pct", "Faster by", round(pct, 0), { suffix: "%" })],
         solution: p("Old CPI = " + cpiTerms(m) + " = " + fmt(m.eff) + ".") +
           p("New CPI = " + newCpi.map(function (c, i) { return fmt(c) + " × " + fmt(m.freq[i] / 100, 1); }).join(" + ") + " = <strong>" + fmt(eff2) + "</strong>.") +
-          p("CPU time<sub>new</sub> = " + fmt(eff2) + " × IC × CC, so " + fmt(m.eff) + " versus " + fmt(eff2) + ": " + fmt(m.eff) + " ÷ " + fmt(eff2) + " = " + fmt(m.eff / eff2, 4) + ", which means <strong>" + fmt(pct, 1) + "% faster</strong>.")
+          p("The instruction count and clock cycle stay the same, so the speedup is " + fmt(m.eff) + " ÷ " + fmt(eff2) + " = " + fmt(m.eff / eff2) + ", which means <strong>" + fmt(pct, 0) + "% faster</strong>.")
       };
     },
     function (R) {
@@ -542,16 +542,19 @@
         m = mixTable(R); ia = R.int(0, 3); ib = R.int(0, 3); a = R.int(1, 2); b = R.int(1, 3);
         gainA = m.freq[ia] / 100 * a; gainB = m.freq[ib] / 100 * b;
         return true;
-      }, function () { return ia !== ib && m.cpi[ia] > a && m.cpi[ib] > b && Math.abs(gainA - gainB) > 0.05; });
+      }, function () {
+        return ia !== ib && m.cpi[ia] > a && m.cpi[ib] > b && Math.abs(gainA - gainB) > 0.05 &&
+          (m.freq[ia] - m.freq[ib]) * (a - b) < 0;
+      });
       var best = gainA > gainB ? "A" : "B", newEff = m.eff - Math.max(gainA, gainB);
       return {
-        prompt: p("A program has the instruction mix below. You can afford one improvement:") + table(["Class", "Frequency", "CPI"], mixRows(m)) +
+        prompt: p("A program has the instruction mix below. You can afford only one of the two improvements listed after it.") + table(["Class", "Frequency", "CPI"], mixRows(m)) +
           ul(["<strong>A</strong>: reduce the " + CLASSES[ia] + " CPI by " + a, "<strong>B</strong>: reduce the " + CLASSES[ib] + " CPI by " + b]) +
           p("Which improvement gives the lower effective CPI, and what is that CPI?"),
         fields: [choice("w", "Better improvement", ["A", "B"], best), num("cpi", "Resulting CPI", round(newEff, 2))],
-        solution: p("Each improvement saves (frequency × cycles saved) cycles per instruction: A saves " + fmt(m.freq[ia] / 100, 1) + " × " + a + " = " + fmt(gainA) +
+        solution: p("Each improvement saves frequency × cycles saved, per instruction. A saves " + fmt(m.freq[ia] / 100, 1) + " × " + a + " = " + fmt(gainA) +
           ", B saves " + fmt(m.freq[ib] / 100, 1) + " × " + b + " = " + fmt(gainB) + ".") +
-          p("<strong>" + best + "</strong> is better: CPI = " + fmt(m.eff) + " − " + fmt(Math.max(gainA, gainB)) + " = <strong>" + fmt(newEff) + "</strong>.")
+          p("<strong>" + best + "</strong> is better, giving CPI = " + fmt(m.eff) + " − " + fmt(Math.max(gainA, gainB)) + " = <strong>" + fmt(newEff) + "</strong>.")
       };
     }
   ]);
@@ -625,6 +628,8 @@
     }
   ]);
 
+  /* speedups students are asked for: multiples of 0.1 or 0.25 (1.2, 1.25, 1.5, 2, …) */
+  function niceRatio(r) { return exact(r, 1) || exact(r * 4, 0); }
   G["cpu/compare"] = variants([
     function (R) {
       var o = R.until(function () { return { fa: R.pick([1, 2, 4, 5]), fb: R.pick([1, 2, 4, 5]), ca: R.int(2, 12) * 2, cb: R.int(2, 12) * 2 }; },
@@ -635,12 +640,12 @@
           p("How long does " + op + " take on each CPU, and which one is faster at it?"),
         fields: [num("a", "Time on A", ta, { suffix: "ns" }), num("b", "Time on B", tb, { suffix: "ns" }), choice("w", "Faster", ["CPU A", "CPU B"], faster)],
         solution: p("Time = cycles ÷ clock rate. A: " + o.ca + " ÷ " + o.fa + " GHz = <strong>" + fmt(ta) + " ns</strong>; B: " + o.cb + " ÷ " + o.fb + " GHz = <strong>" + fmt(tb) + " ns</strong>.") +
-          p("<strong>" + faster + "</strong> is faster, even though " + (o.fa > o.fb ? "A" : "B") + " has the " + (faster === (o.fa > o.fb ? "CPU A" : "CPU B") ? "faster clock too." : "faster clock: the clock rate alone does not decide performance."))
+          p("<strong>" + faster + "</strong> is faster.")
       };
     },
     function (R) {
       var o = R.until(function () { return { r1: R.pick([1, 2, 2.5, 4, 5]), r2: R.pick([1, 2, 2.5, 4, 5]), c1: R.pick(NICE_CPI), c2: R.pick(NICE_CPI) }; },
-        function (x) { var a = x.c1 / x.r1, b = x.c2 / x.r2, r = Math.max(a, b) / Math.min(a, b); return r > 1.01 && exact(r, 2); });
+        function (x) { var a = x.c1 / x.r1, b = x.c2 / x.r2, r = Math.max(a, b) / Math.min(a, b); return r > 1.01 && niceRatio(r); });
       var t1 = o.c1 / o.r1, t2 = o.c2 / o.r2, faster = t1 < t2 ? "P1" : "P2", sp = Math.max(t1, t2) / Math.min(t1, t2);
       return {
         prompt: p("Two processors implement the same instruction set and run the same program.") + table(["Processor", "Clock rate", "CPI"], [["P1", o.r1 + " GHz", o.c1], ["P2", o.r2 + " GHz", o.c2]]) +
@@ -652,7 +657,7 @@
     },
     function (R) {
       var o = R.until(function () { return { i1: R.pick([2, 3, 4, 5, 6]), i2: R.pick([2, 3, 4, 5, 6]), c1: R.pick([1, 1.5, 2, 3]), c2: R.pick([1, 1.5, 2, 3]), f: R.pick([1, 2]) }; },
-        function (x) { var a = x.i1 * x.c1, b = x.i2 * x.c2, r = Math.max(a, b) / Math.min(a, b); return r > 1.01 && exact(r, 2) && x.i1 !== x.i2; });
+        function (x) { var a = x.i1 * x.c1, b = x.i2 * x.c2, r = Math.max(a, b) / Math.min(a, b); return r > 1.01 && niceRatio(r) && x.i1 !== x.i2; });
       var t1 = o.i1 * o.c1 / o.f, t2 = o.i2 * o.c2 / o.f, faster = t1 < t2 ? "Compiler A" : "Compiler B", sp = Math.max(t1, t2) / Math.min(t1, t2);
       return {
         prompt: p("Two compilers produce different code for the same program, run on the same " + o.f + " GHz processor.") +
@@ -684,8 +689,8 @@
       var ca = sum(o.fr.map(function (f, i) { return f / 100 * o.a[i]; })), cb = sum(o.fr.map(function (f, i) { return f / 100 * o.b[i]; }));
       var ta = ca / o.fa, tb = cb / o.fb, faster = ta < tb ? "P1" : "P2";
       return {
-        prompt: p("A program's instruction mix and the CPI of each class on two processors are below.") +
-          table(["Class", "Frequency", "CPI on P1 (" + o.fa + " GHz)", "CPI on P2 (" + o.fb + " GHz)"], names.map(function (n, i) { return [n, o.fr[i] + "%", o.a[i], o.b[i]]; })) +
+        prompt: p("Processor P1 runs at " + o.fa + " GHz and processor P2 runs at " + o.fb + " GHz. A program's instruction mix and the CPI of each class on the two processors are below.") +
+          table(["Class", "Frequency", "CPI on P1", "CPI on P2"], names.map(function (n, i) { return [n, o.fr[i] + "%", o.a[i], o.b[i]]; })) +
           p("Give each processor's effective CPI, and say which runs the program faster."),
         fields: [num("a", "P1 CPI", round(ca, 2)), num("b", "P2 CPI", round(cb, 2)), choice("w", "Faster processor", ["P1", "P2"], faster)],
         solution: p("P1 CPI = " + o.a.map(function (c, i) { return c + " × " + fmt(o.fr[i] / 100, 1); }).join(" + ") + " = <strong>" + fmt(ca) + "</strong>; time per instruction " + fmt(ca) + " ÷ " + o.fa + " = " + fmt(ta, 3) + " ns.") +
@@ -704,66 +709,24 @@
       var rows = R.shuffle(FACTORS.slice()).slice(0, R.pick([3, 4, 5])), fields = [], trows = [];
       rows.forEach(function (fc, i) {
         var row = [fc[0]];
-        TERMS.forEach(function (t, k) { fields.push(choice("f" + i + "_" + k, fc[0] + ": " + t, ["X", "—"], fc[1][k] ? "X" : "—")); row.push({ f: "f" + i + "_" + k }); });
+        TERMS.forEach(function (t, k) { fields.push(choice("f" + i + "_" + k, fc[0] + ", " + t, YN, fc[1][k] ? "yes" : "no")); row.push({ f: "f" + i + "_" + k }); });
         trows.push(row);
       });
       return {
-        prompt: p("CPU time = Instruction_count × CPI × clock_cycle. Mark with X each term that the item can affect (— if it cannot)."),
+        prompt: p("Which terms of CPU time can each item affect? Answer yes or no in each cell."),
         table: { head: [""].concat(TERMS), rows: trows },
         fields: fields,
         solution: table([""].concat(TERMS), rows.map(function (fc) { return [fc[0]].concat(fc[1].map(function (v) { return v ? "<strong>X</strong>" : ""; })); })) +
-          p("The algorithm, language and compiler decide which instructions run (instruction count and CPI); the ISA affects all three; the processor organization affects CPI and the clock cycle.")
+          p("The algorithm, language, and compiler decide which instructions run, so they affect the instruction count and CPI. The ISA affects all three. The processor organization affects CPI and the clock cycle.")
       };
     },
     function (R) {
       var k = R.int(0, 2), fields = FACTORS.map(function (fc, i) { return choice("g" + i, fc[0], YN, fc[1][k] ? "yes" : "no"); });
       return {
-        prompt: p("CPU time = Instruction_count × CPI × clock_cycle. Which of these can change the <strong>" + TERMS[k].toLowerCase() + "</strong>" + (k === 1 ? "" : " of a program") + "?"),
+        prompt: p("Which of these can change the <strong>" + TERMS[k].toLowerCase() + "</strong>" + (k === 1 ? "" : " of a program") + "?"),
         fields: fields,
         solution: p(TERMS[k] + " can be affected by: <strong>" + FACTORS.filter(function (fc) { return fc[1][k]; }).map(function (fc) { return fc[0].toLowerCase(); }).join(", ") + "</strong>.") +
           table([""].concat(TERMS), FACTORS.map(function (fc) { return [fc[0]].concat(fc[1].map(function (v) { return v ? "X" : ""; })); }))
-      };
-    }
-  ]);
-
-  /* SPEC ratios with a whole-number geometric mean */
-  function specRatios(R) {
-    var g = R.pick([2, 3, 4, 6, 8, 10, 12]), ks = [2, 3, 4].filter(function (k) { return g % k === 0; });
-    var k = R.pick(ks.length ? ks : [1]), three = R.chance(0.5) && g / k >= 1;
-    return { g: g, ratios: R.shuffle(three ? [g / k, g, g * k] : [g / k, g * k]) };
-  }
-  G["cpu/power"] = variants([
-    function (R) {
-      var o = R.until(function () { return { c: R.pick([50, 80, 85, 90, 100]), v: R.pick([10, 15, 20, 50]), f: R.pick([0, 10, 15, 20, 50]) }; },
-        function (x) { var r = x.c / 100 * Math.pow(1 - x.v / 100, 2) * (1 - x.f / 100); return exact(r, 2); });
-      var r = o.c / 100 * Math.pow(1 - o.v / 100, 2) * (1 - o.f / 100);
-      return {
-        prompt: p("Power = capacitive load × voltage² × frequency switched. A new CPU has " + o.c + "% of the capacitive load of the old CPU, a " + o.v + "% voltage reduction" + (o.f ? " and a " + o.f + "% frequency reduction" : " and the same frequency") + ".") +
-          p("What is P<sub>new</sub> ÷ P<sub>old</sub>?"),
-        fields: [num("r", "P_new ÷ P_old", round(r, 2))],
-        solution: p("P<sub>new</sub> ÷ P<sub>old</sub> = " + fmt(o.c / 100) + " × " + fmt(1 - o.v / 100) + "² × " + fmt(1 - o.f / 100) + " = <strong>" + fmt(r) + "</strong>")
-      };
-    },
-    function (R) {
-      var o = R.pick([{ c: 30, a: 5, b: 1, f: 1000 }, { c: 10, a: 5, b: 1, f: 100 }, { c: 20, a: 4, b: 2, f: 50 }, { c: 8, a: 3, b: 1, f: 90 }, { c: 4, a: 2, b: 1, f: 10 }, { c: 25, a: 5, b: 1, f: 200 }]);
-      var r = o.c * Math.pow(o.b / o.a, 2) * o.f;
-      return {
-        prompt: p("Power = capacitive load × voltage² × frequency switched. Between two CPU generations, the capacitive load grew ×" + o.c + ", the voltage dropped from " + o.a + " V to " + o.b + " V, and the frequency grew ×" + o.f + ". By what factor did the power grow?"),
-        fields: [num("r", "Power factor", round(r, 2))],
-        solution: p("Factor = " + o.c + " × (" + o.b + "/" + o.a + ")² × " + o.f + " = " + o.c + " × " + fmt(Math.pow(o.b / o.a, 2), 4) + " × " + o.f + " = <strong>" + fmt(r) + "</strong>")
-      };
-    },
-    function (R) {
-      var s = specRatios(R), names = R.shuffle(["bzip2", "gcc", "mcf", "gobmk", "hmmer", "sjeng", "astar", "xalancbmk"]).slice(0, s.ratios.length);
-      var times = s.ratios.map(function () { return R.pick([10, 20, 25, 40, 50, 100]); });
-      var fields = s.ratios.map(function (r, i) { return num("r" + i, names[i] + " ratio", r, { size: 5 }); });
-      fields.push(num("g", "Geometric mean", s.g));
-      return {
-        prompt: p("SPEC normalizes each execution time to a reference machine (ratio = reference time ÷ measured time) and summarizes the ratios with their geometric mean. Fill in the ratios and the geometric mean."),
-        table: { head: ["Benchmark", "Reference time (s)", "Measured time (s)", "Ratio"], rows: s.ratios.map(function (r, i) { return [names[i], fmt(r * times[i]), times[i], { f: "r" + i }]; }) },
-        fields: fields,
-        solution: p("Ratios: " + s.ratios.map(function (r, i) { return fmt(r * times[i]) + " ÷ " + times[i] + " = " + fmt(r); }).join("; ") + ".") +
-          p("Geometric mean = " + (s.ratios.length === 2 ? "√" : "∛") + "(" + s.ratios.map(function (r) { return fmt(r); }).join(" × ") + ") = " + (s.ratios.length === 2 ? "√" : "∛") + fmt(s.ratios.reduce(function (a, b) { return a * b; }, 1)) + " = <strong>" + s.g + "</strong>")
       };
     }
   ]);
@@ -788,7 +751,7 @@
       var o = R.until(function () { return { h: R.int(1, 2), m: R.pick([2, 4, 5, 10, 20]), pen: R.pick([20, 50, 100, 200]) }; }, function (x) { return exact(x.h + x.m / 100 * x.pen, 2); });
       var a = o.h + o.m / 100 * o.pen;
       return {
-        prompt: p("A cache has a hit time of " + o.h + " cycle" + (o.h > 1 ? "s" : "") + ", a miss rate of " + o.m + "% and a miss penalty of " + o.pen + " cycles. What is the AMAT?"),
+        prompt: p("A cache has a hit time of " + o.h + " cycle" + (o.h > 1 ? "s" : "") + ", a miss rate of " + o.m + "%, and a miss penalty of " + o.pen + " cycles. What is the AMAT?"),
         fields: [num("a", "AMAT", round(a, 2), { suffix: "cycles" })],
         solution: p("AMAT = hit time + miss rate × miss penalty = " + o.h + " + " + fmt(o.m / 100) + " × " + o.pen + " = <strong>" + fmt(a) + " cycles</strong>")
       };
@@ -810,7 +773,7 @@
         function (x) { return exact((x.h + x.m / 100 * x.pen) * x.ps / 1000, 2); });
       var cyc = o.h + o.m / 100 * o.pen, ns = cyc * o.ps / 1000;
       return {
-        prompt: p("A processor's clock cycle is " + o.ps + " ps. Its cache has a hit time of " + o.h + " cycle" + (o.h > 1 ? "s" : "") + ", a miss rate of " + o.m + "% and a miss penalty of " + o.pen + " cycles. What is the AMAT in nanoseconds?"),
+        prompt: p("A processor's clock cycle is " + o.ps + " ps. Its cache has a hit time of " + o.h + " cycle" + (o.h > 1 ? "s" : "") + ", a miss rate of " + o.m + "%, and a miss penalty of " + o.pen + " cycles. What is the AMAT in nanoseconds?"),
         fields: [num("a", "AMAT", round(ns, 2), { suffix: "ns" })],
         solution: p("AMAT = " + o.h + " + " + fmt(o.m / 100) + " × " + o.pen + " = " + fmt(cyc) + " cycles = " + fmt(cyc) + " × " + o.ps + " ps = <strong>" + fmt(ns) + " ns</strong>")
       };
@@ -833,7 +796,7 @@
         function (x) { return exact(x.ls / 100 * x.mr / 100 * x.pen, 2); });
       var st = o.ls / 100 * o.mr / 100 * o.pen;
       return {
-        prompt: p("A program running on a processor has a CPI<sub>ideal</sub> of " + o.base + ", a " + o.pen + "-cycle miss penalty, " + o.ls + "% load/store instructions and a " + o.mr + "% miss rate on those data accesses. What are the average memory stall cycles, and what is CPI<sub>stall</sub>?"),
+        prompt: p("A program running on a processor has a CPI<sub>ideal</sub> of " + o.base + ", a " + o.pen + "-cycle miss penalty, " + o.ls + "% load/store instructions, and a " + o.mr + "% miss rate on those data accesses. What are the average memory stall cycles, and what is CPI<sub>stall</sub>?"),
         fields: [num("m", "Memory-stall cycles", round(st, 2)), num("c", "CPI_stall", round(o.base + st, 2))],
         solution: p("Memory-stall cycles = access rate × miss rate × miss penalty = " + o.ls + "% × " + o.mr + "% × " + o.pen + " = <strong>" + fmt(st) + "</strong>") +
           p("CPI<sub>stall</sub> = CPI<sub>ideal</sub> + stall cycles = " + o.base + " + " + fmt(st) + " = <strong>" + fmt(o.base + st) + "</strong>")
@@ -1006,7 +969,7 @@
       rows.push([code(hex(a, m / 4)), { f: "t" + i }, { f: "i" + i }, { f: "o" + i }, { f: "h" + i }]);
     });
     return {
-      prompt: p("A direct-mapped cache uses " + m + "-bit byte addresses: a " + tb + "-bit tag, a " + ib + "-bit index and a " + ob + "-bit offset. It starts empty. For each address in order, write its tag, index and offset bits and say whether it hits."),
+      prompt: p("A direct-mapped cache uses " + m + "-bit byte addresses: a " + tb + "-bit tag, a " + ib + "-bit index, and a " + ob + "-bit offset. It starts empty. For each address in order, write its tag, index, and offset bits and say whether it hits."),
       table: { head: ["Address", "Tag", "Index", "Offset", "Hit/miss"], rows: rows },
       fields: fields, wide: true,
       solution: table(["Address", "Binary", "Tag", "Index", "Offset", "Result"], addrs.map(function (a, i) {
@@ -1024,7 +987,7 @@
       var kb = size >= 1024 ? (size / 1024) + " KiB" : size + "-byte";
       var org = assoc === 1 ? "direct-mapped" : assoc + "-way set-associative";
       return {
-        prompt: p("A " + kb + " " + org + " cache has " + block + "-byte blocks. Addresses are " + abits + " bits and refer to bytes. How many bits are used for the offset, index and tag?"),
+        prompt: p("A " + kb + " " + org + " cache has " + block + "-byte blocks. Addresses are " + abits + " bits and refer to bytes. How many bits are used for the offset, index, and tag?"),
         fields: [num("o", "Offset bits", ob), num("i", "Index bits", ib), num("t", "Tag bits", tb)],
         solution: (function () {
           var c = Math.log2(size), a = Math.log2(assoc);
@@ -1038,7 +1001,7 @@
       var words = Math.pow(2, R.int(9, 12)), bw = R.pick([2, 4, 8]), assoc = R.pick([1, 2, 4, 16]);
       var bytes = words * 4, block = bw * 4, sets = bytes / block / assoc, ob = Math.log2(block), ib = Math.log2(sets), tb = 32 - ob - ib;
       return {
-        prompt: p("A 32-bit machine has a " + (assoc === 1 ? "direct-mapped" : assoc + "-way set-associative") + " cache holding " + words + " words (1 word = 4 bytes). Each block holds " + bw + " words. Addresses refer to bytes. How long are the tag, set index and block offset?"),
+        prompt: p("A 32-bit machine has a " + (assoc === 1 ? "direct-mapped" : assoc + "-way set-associative") + " cache holding " + words + " words (1 word = 4 bytes). Each block holds " + bw + " words. Addresses refer to bytes. How long are the tag, set index, and block offset?"),
         fields: [num("t", "Tag bits", tb), num("i", "Index bits", ib), num("o", "Offset bits", ob)],
         solution: (function () {
           var w = Math.log2(words), c = w + 2, a = Math.log2(assoc);
@@ -1052,7 +1015,7 @@
       var ob = R.int(2, 6), ib = R.int(4, 10), assoc = R.pick([1, 2, 4]), tb = 32 - ob - ib;
       var size = Math.pow(2, ob) * Math.pow(2, ib) * assoc;
       return {
-        prompt: p("A " + (assoc === 1 ? "direct-mapped" : assoc + "-way set-associative") + " cache uses 32-bit byte addresses with a " + tb + "-bit tag, a " + ib + "-bit index and a " + ob + "-bit offset. What is the block size, and what is the capacity in bytes?"),
+        prompt: p("A " + (assoc === 1 ? "direct-mapped" : assoc + "-way set-associative") + " cache uses 32-bit byte addresses with a " + tb + "-bit tag, a " + ib + "-bit index, and a " + ob + "-bit offset. What is the block size, and what is the capacity in bytes?"),
         fields: [num("b", "Block size", Math.pow(2, ob), { suffix: "bytes" }), num("c", "Capacity", size, { suffix: "bytes" })],
         solution: p("Block = " + pow2(ob) + " = <strong>" + Math.pow(2, ob) + "</strong> bytes; sets = " + pow2(ib) + (assoc > 1 ? "; ways = " + pow2(Math.log2(assoc)) : "") + ".") +
           p("Capacity = " + pow2(ob) + " × " + pow2(ib) + (assoc > 1 ? " × " + pow2(Math.log2(assoc)) : "") + " = " + pow2(ob + ib + Math.log2(assoc)) + " = <strong>" + size + "</strong> bytes.")
@@ -1188,7 +1151,7 @@
         prompt: p("A " + (Math.pow(2, c) >= 1024 ? Math.pow(2, c) / 1024 + " KiB" : Math.pow(2, c) + "-byte") + " " + org(N) + " cache has " + Math.pow(2, b) + "-byte blocks and 32-bit addresses. Its size and block size stay fixed while its associativity doubles to " + org(2 * N) + ". Give the number of sets and the tag size, before and after."),
         fields: [num("r0", "Sets before", R0), num("t0", "Tag bits before", m - s0 - b), num("r1", "Sets after", R0 / 2), num("t1", "Tag bits after", m - s0 + 1 - b)],
         solution: p("Before: R = " + pow2(c) + " ÷ (" + pow2(b) + " × " + N + ") = <strong>" + R0 + "</strong> sets, s = " + s0 + ", t = 32 − " + s0 + " − " + b + " = <strong>" + (m - s0 - b) + "</strong>.") +
-          p("Each doubling of associativity doubles the blocks per set, halves the number of sets (<strong>" + R0 / 2 + "</strong>), shrinks the set index by 1 bit and grows the tag by 1 bit (<strong>" + (m - s0 + 1 - b) + "</strong>).")
+          p("Each doubling of associativity doubles the blocks per set, halves the number of sets (<strong>" + R0 / 2 + "</strong>), shrinks the set index by 1 bit, and grows the tag by 1 bit (<strong>" + (m - s0 + 1 - b) + "</strong>).")
       };
     }
   ]);
@@ -1497,7 +1460,7 @@
       var worst = o.period - o.cq - o.su, others = [R.int(4, worst / 10 - 2) * 10, R.int(4, worst / 10 - 2) * 10], paths = R.shuffle([worst].concat(others));
       var ghz = 1000 / o.period;
       return {
-        prompt: p("Registers A, B and C have a clk-to-q delay of " + o.cq + " ps, a setup time of " + o.su + " ps and a hold time of " + o.hold + " ps. The logic between them has these delays:") +
+        prompt: p("Registers A, B, and C have a clk-to-q delay of " + o.cq + " ps, a setup time of " + o.su + " ps, and a hold time of " + o.hold + " ps. The logic between them has these delays:") +
           table(["Path", "Delay"], [["A → B", paths[0] + " ps"], ["B → C", paths[1] + " ps"], ["A → C", paths[2] + " ps"]]) +
           p("What is the minimum clock period, and the maximum clock frequency?"),
         fields: [num("t", "Minimum period", o.period, { suffix: "ps" }), num("f", "Maximum frequency", round(ghz, 2), { suffix: "GHz" })],
@@ -1675,7 +1638,7 @@
       var regs = R.shuffle(["$s0", "$s1", "$s2", "$s3", "$s4"]), A = regs[0], i = regs[1], x = regs[2], t = R.pick(["$t0", "$t1"]);
       var load = R.chance(0.5), idx = R.chance(0.5) ? 0 : R.int(1, 5), cl = load ? "x = A[i" + (idx ? " + " + idx : "") + "];" : "A[i" + (idx ? " + " + idx : "") + "] = x;";
       return {
-        prompt: p("Array A holds 4-byte ints; its base address is in " + code(A) + ", i is in " + code(i) + " and x is in " + code(x) + ". Fill in the blanks to translate:") + pre([cl]),
+        prompt: p("Array A holds 4-byte ints; its base address is in " + code(A) + ", i is in " + code(i) + ", and x is in " + code(x) + ". Fill in the blanks to translate:") + pre([cl]),
         code: [["sll " + t + ", " + i + ", ", { f: "sh" }], ["add " + t + ", " + A + ", " + t], [{ f: "op" }, " " + x + ", ", { f: "off" }, "(" + t + ")"]],
         fields: [num("sh", "shift amount", 2, { size: 3 }), choice("op", "instruction", MN, load ? "lw" : "sw"), num("off", "offset", 4 * idx, { size: 3 })],
         solution: pre(["sll " + t + ", " + i + ", 2      # i × 4", "add " + t + ", " + A + ", " + t + "    # &A[i]", (load ? "lw " : "sw ") + x + ", " + 4 * idx + "(" + t + ")"]) + p("Each int is 4 bytes, so indexes are multiplied by 4 (shift left 2) and a constant +" + idx + " becomes an offset of " + 4 * idx + ".")
@@ -1684,7 +1647,7 @@
     function (R) {
       var r = R.shuffle(["$s3", "$s4", "$s5", "$s6", "$s7"]), I = r[0], K = r[1], S = r[2], ne = R.chance(0.5), step = R.pick([1, 1, 2]);
       return {
-        prompt: p("Translate the loop below; i is in " + code(I) + ", k in " + code(K) + " and the base address of save[] (4-byte ints) in " + code(S) + ". Fill in the blanks.") +
+        prompt: p("Translate the loop below; i is in " + code(I) + ", k in " + code(K) + ", and the base address of save[] (4-byte ints) in " + code(S) + ". Fill in the blanks.") +
           pre(["while (save[i] " + (ne ? "!=" : "==") + " k)", "    i += " + step + ";"]),
         code: [["Loop: sll  $t1, " + I + ", ", { f: "sh" }], ["      add  $t1, $t1, " + S], ["      lw   $t0, 0($t1)"], ["      ", { f: "br" }, "  $t0, " + K + ", Exit"], ["      addi " + I + ", " + I + ", ", { f: "st" }], ["      ", { f: "jj" }, "    Loop"], ["Exit:"]],
         fields: [num("sh", "shift amount", 2, { size: 3 }), choice("br", "branch", MN, ne ? "beq" : "bne"), num("st", "step", step, { size: 3 }), choice("jj", "jump", MN, "j")],
@@ -1694,7 +1657,7 @@
     function (R) {
       var r = R.shuffle(["$s0", "$s1", "$s2", "$s3"]), F = r[0], Gg = r[1], H = r[2], a = R.int(1, 3), b = R.int(2, 9);
       return {
-        prompt: p("f, g and h are in " + code(F) + ", " + code(Gg) + " and " + code(H) + ". Fill in the blanks to translate:") + pre(["f = (g << " + a + ") + (h - " + b + ");"]),
+        prompt: p("f, g, and h are in " + code(F) + ", " + code(Gg) + ", and " + code(H) + ". Fill in the blanks to translate:") + pre(["f = (g << " + a + ") + (h - " + b + ");"]),
         code: [["sll  $t0, " + Gg + ", ", { f: "a" }], ["addi $t1, " + H + ", ", { f: "b" }], [{ f: "op" }, "  " + F + ", $t0, $t1"]],
         fields: [num("a", "shift amount", a, { size: 3 }), num("b", "immediate", -b, { size: 4 }), choice("op", "instruction", MN, "add")],
         solution: pre(["sll  $t0, " + Gg + ", " + a, "addi $t1, " + H + ", " + -b + "   # subi is a pseudo-op for this", "add  " + F + ", $t0, $t1"])
@@ -1703,7 +1666,7 @@
     function (R) {
       var r = R.shuffle(["$s0", "$s1", "$s2", "$s3"]), A = r[0], B = r[1], X = r[2];
       return {
-        prompt: p("a, b and x are in " + code(A) + ", " + code(B) + " and " + code(X) + ". Translate without a branch by filling in the blanks:") + pre(["x = (a < b) ? 1 : 0;"]),
+        prompt: p("a, b, and x are in " + code(A) + ", " + code(B) + ", and " + code(X) + ". Translate without a branch by filling in the blanks:") + pre(["x = (a < b) ? 1 : 0;"]),
         code: [[{ f: "op" }, " " + X + ", ", { f: "r1" }, ", ", { f: "r2" }]],
         fields: [choice("op", "instruction", MN, "slt"), { id: "r1", label: "first operand", kind: "reg", answer: REGS.indexOf(A), size: 5 }, { id: "r2", label: "second operand", kind: "reg", answer: REGS.indexOf(B), size: 5 }],
         solution: pre(["slt " + X + ", " + A + ", " + B]) + p(code("slt rd, rs, rt") + " sets rd to 1 exactly when rs < rt.")
@@ -1937,7 +1900,7 @@
   }
   function numbered(ins) { return pre(ins.map(function (i, k) { return (k + 1) + ": " + i.text; })); }
   var PIPE_RULES = "Classic 5-stage pipeline (IF ID EX MEM WB). The register file is written in the first half of a cycle and read in the second half, and instruction and data memory are separate, so there are no structural hazards.";
-  var FWD_TEXT = { none: "on the basic datapath (no forwarding)", alu: "with ALU-ALU and MEM-ALU forwarding", mem: "with ALU-ALU, MEM-ALU and MEM-MEM forwarding" };
+  var FWD_TEXT = { none: "on the basic datapath (no forwarding)", alu: "with ALU-ALU and MEM-ALU forwarding", mem: "with ALU-ALU, MEM-ALU, and MEM-MEM forwarding" };
 
   G["pipelining/pipeline-time"] = variants([
     function (R) {
@@ -1945,7 +1908,7 @@
       var mem = R.pick([200, 250, 300]), alu = R.pick([150, 200, 250]), reg = R.pick([50, 100, 150]), n = R.pick([2, 3, 4, 5, 10]);
       var t = [mem, reg, alu, mem, reg], total = sum(t), cc = maxOf(t), single = n * total, fill = 4 * cc, piped = fill + n * cc;
       return {
-        prompt: p("Accessing memory takes " + mem + " ps (IF, MEM), the ALU takes " + alu + " ps (EX) and accessing registers takes " + reg + " ps (ID, WB). A program runs " + n + " lw instructions with no hazards.") +
+        prompt: p("Accessing memory takes " + mem + " ps (IF, MEM), the ALU takes " + alu + " ps (EX), and accessing registers takes " + reg + " ps (ID, WB). A program runs " + n + " lw instructions with no hazards.") +
           p("How long does it take on a single-cycle datapath, and on a pipelined one? What is the actual speedup? (A fraction is fine.)"),
         fields: [num("s", "Single-cycle", single, { suffix: "ps" }), num("p", "Pipelined", piped, { suffix: "ps" }), num("sp", "Actual speedup", single / piped, { tol: 0.005, frac: true })],
         solution: p("Single-cycle clock = sum of all stages = " + t.join(" + ") + " = " + total + " ps, so " + n + " × " + total + " = <strong>" + single + " ps</strong>.") +
@@ -2062,7 +2025,7 @@
       return {
         prompt: p("What kind of hazard, if any, does each situation create in a 5-stage pipeline?"),
         fields: cases.map(function (c, k) { return choice("h" + k, (k + 1) + ". " + c.t, opts, c.a, { wide: true }); }),
-        solution: ul(cases.map(function (c, k) { return (k + 1) + ". <strong>" + c.a + "</strong>"; })) + p("Data hazards come from dependencies, structural hazards from shared hardware, control hazards from branches and jumps."),
+        solution: ul(cases.map(function (c, k) { return (k + 1) + ". <strong>" + c.a + "</strong>"; })) + p("Data hazards come from dependencies, structural hazards from shared hardware, and control hazards from branches and jumps."),
         layout: "stack"
       };
     }
@@ -2271,7 +2234,7 @@
         function () { return kinds.indexOf("true sharing miss") !== -1 && kinds.indexOf("false sharing miss") !== -1; });
       var opts = ["hit", "true sharing miss", "false sharing miss"];
       return {
-        prompt: p("Let x1 and x2 belong to the same cache block. Processors 1 and 2 have private caches with write-invalidate coherence, and both begin with the block loaded. Classify each access as a hit, a true sharing miss or a false sharing miss."),
+        prompt: p("Let x1 and x2 belong to the same cache block. Processors 1 and 2 have private caches with write-invalidate coherence, and both begin with the block loaded. Classify each access as a hit, a true sharing miss, or a false sharing miss."),
         table: { head: ["Time", "P1", "P2", "True, false, hit?"], rows: steps.map(function (st, k) { var a = (st.op === "R" ? "Read x" : "Write x") + st.w; return [k + 1, st.p === 0 ? a : "", st.p === 1 ? a : "", { f: "k" + k }]; }) },
         fields: kinds.map(function (kd, k) { return choice("k" + k, "", opts, kd); }),
         solution: table(["Time", "Access", "Result"], steps.map(function (st, k) { return [k + 1, "P" + (st.p + 1) + (st.op === "R" ? " reads" : " writes") + " x" + st.w, "<strong>" + kinds[k] + "</strong>"]; })) +
@@ -2299,7 +2262,7 @@
       return {
         prompt: p("x[1] and x[2] are in the same cache block. P1 and P2 (private caches, initially empty, write-invalidate; writing a block you already hold is a hit) perform:") +
           table(["Time", "Access"], steps.map(function (s, k) { return [k + 1, "P" + (s.p + 1) + (s.op === "R" ? " reads" : " writes") + " x[" + s.w + "]"]; })) +
-          p("How many cold misses, true sharing misses and false sharing misses occur?"),
+          p("How many cold misses, true sharing misses, and false sharing misses occur?"),
         fields: [num("c", "Cold misses", c("cold miss")), num("t", "True sharing misses", c("true sharing miss")), num("f", "False sharing misses", c("false sharing miss"))],
         solution: table(["Time", "Result"], kinds.map(function (k, i) { return [i + 1, k]; }))
       };
@@ -2316,7 +2279,7 @@
           pre(["void incrAddr(int* address) {", "    int val = *address;", "    val " + (k === 1 ? "++" : "+= " + k) + ";", "    *address = val;", "}", ""].concat(ts)) +
           p("After all threads are joined, list every value " + code("*p") + " could hold."),
         fields: [{ id: "v", label: "Possible values", kind: "set", answer: vals, size: 16 }],
-        solution: p("Each thread reads, adds " + k + " and writes back. If threads read before the others write, their updates overwrite each other, so anywhere from 1 to " + n + " updates survive: <strong>" + vals.join(", ") + "</strong>. A lock (mutual exclusion) around the critical section would always give " + (v + n * k) + ".")
+        solution: p("Each thread reads, adds " + k + ", and writes back. If threads read before the others write, their updates overwrite each other, so anywhere from 1 to " + n + " updates survive: <strong>" + vals.join(", ") + "</strong>. A lock (mutual exclusion) around the critical section would always give " + (v + n * k) + ".")
       };
     },
     function (R) {
